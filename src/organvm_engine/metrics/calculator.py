@@ -27,17 +27,84 @@ def _count_file_words(path: Path) -> int:
     return len(text.split())
 
 
-def count_words(workspace: Path) -> dict:
-    """Count words across the workspace by category.
+def _normalize_candidates(
+    candidates: list[Path] | None,
+    workspace: Path | None,
+) -> list[Path]:
+    """Build the final probe list from either ``candidates`` or legacy ``workspace``."""
+    if candidates is not None:
+        raw = list(candidates)
+    elif workspace is not None:
+        raw = [workspace]
+    else:
+        return []
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for c in raw:
+        if c is None:
+            continue
+        p = Path(c)
+        if not p.is_dir():
+            continue
+        rp = p.resolve()
+        if rp in seen:
+            continue
+        seen.add(rp)
+        out.append(rp)
+    return out
 
-    Walks the filesystem to count words in READMEs, essays, corpus docs,
-    and org profile READMEs.
 
-    Args:
-        workspace: Path to the workspace root (e.g. ~/Workspace).
+def _resolve_repo_path(
+    org_dir_hint: str,
+    repo_name: str,
+    candidates: list[Path],
+) -> Path | None:
+    """Probe candidate roots for a repo's filesystem location.
 
-    Returns:
-        Dict with keys: readmes, essays, corpus, org_profiles, total.
+    For each root, tries organ-grouped layout first
+    (``<root>/<org_dir_hint>/<repo_name>``), then flat layout
+    (``<root>/<repo_name>``). Returns the first existing directory, or None.
+    """
+    if not repo_name:
+        return None
+    for root in candidates:
+        if org_dir_hint:
+            grouped = root / org_dir_hint / repo_name
+            if grouped.is_dir():
+                return grouped
+        flat = root / repo_name
+        if flat.is_dir():
+            return flat
+    return None
+
+
+def _resolve_named_dir(
+    org_dir_hint: str,
+    sub_path: str,
+    candidates: list[Path],
+) -> Path | None:
+    """Probe candidate roots for a named subdirectory.
+
+    Like ``_resolve_repo_path`` but for known relative paths such as
+    ``public-process/_posts``. Tries organ-grouped first, then flat.
+    """
+    for root in candidates:
+        if org_dir_hint:
+            grouped = root / org_dir_hint / sub_path
+            if grouped.is_dir():
+                return grouped
+        flat = root / sub_path
+        if flat.is_dir():
+            return flat
+    return None
+
+
+def _legacy_count_words_filesystem(workspace: Path) -> dict:
+    """Legacy filesystem-walker — iterates ORGANS dirs under a single root.
+
+    Preserved for backward compat with existing tests and cli/metrics.py callers
+    that pass a single workspace Path. New code should use the registry-driven
+    path via ``count_words(registry, candidates=...)``.
     """
     from organvm_engine.organ_config import ORGANS
 
@@ -60,9 +127,9 @@ def count_words(workspace: Path) -> dict:
             essay_words += _count_file_words(md)
 
     corpus_words = 0
-    corpus_dir = workspace / "meta-organvm" / "organvm-corpvs-testamentvm" / "docs"
-    if corpus_dir.is_dir():
-        for md in sorted(corpus_dir.rglob("*.md")):
+    corpus_target = workspace / "meta-organvm" / "organvm-corpvs-testamentvm" / "docs"
+    if corpus_target.is_dir():
+        for md in sorted(corpus_target.rglob("*.md")):
             corpus_words += _count_file_words(md)
 
     profile_words = 0
@@ -70,6 +137,79 @@ def count_words(workspace: Path) -> dict:
         profile = workspace / organ_info["dir"] / ".github" / "profile" / "README.md"
         if profile.is_file():
             profile_words += _count_file_words(profile)
+
+    total = readme_words + essay_words + corpus_words + profile_words
+    return {
+        "readmes": readme_words,
+        "essays": essay_words,
+        "corpus": corpus_words,
+        "org_profiles": profile_words,
+        "total": total,
+    }
+
+
+def count_words(
+    registry_or_workspace,
+    *,
+    candidates: list[Path] | None = None,
+    workspace: Path | None = None,
+) -> dict:
+    """Count words across the workspace by category, registry-driven.
+
+    Iterates ``registry["organs"][*]["repositories"]``, resolves each repo to
+    a filesystem location by probing ``candidates`` (organ-grouped layout first,
+    flat-namespace fallback), and counts ``README.md`` + ``.github/profile/README.md``.
+    Essays and corpus docs are resolved via known canonical sub-paths.
+
+    Args:
+        registry: Loaded registry-v2.json dict.
+        candidates: Priority-ordered list of candidate workspace roots. Each repo
+            is probed against these in order.
+        workspace: Legacy single-root parameter. Used only when ``candidates`` is
+            None; equivalent to ``candidates=[workspace]``.
+
+    Returns:
+        Dict with keys: readmes, essays, corpus, org_profiles, total.
+    """
+    # Backward-compat: legacy callers pass a single workspace Path positionally
+    if isinstance(registry_or_workspace, (str, Path)):
+        return _legacy_count_words_filesystem(Path(registry_or_workspace))
+    registry = registry_or_workspace
+    roots = _normalize_candidates(candidates, workspace)
+
+    readme_words = 0
+    profile_words = 0
+    for organ_data in registry.get("organs", {}).values():
+        for repo in organ_data.get("repositories", []):
+            if repo.get("implementation_status") == "ARCHIVED":
+                continue
+            name = repo.get("name", "")
+            org_dir = repo.get("org", "")
+            repo_path = _resolve_repo_path(org_dir, name, roots)
+            if repo_path is None:
+                continue
+            readme = repo_path / "README.md"
+            if readme.is_file():
+                readme_words += _count_file_words(readme)
+            profile = repo_path / ".github" / "profile" / "README.md"
+            if profile.is_file():
+                profile_words += _count_file_words(profile)
+
+    essay_words = 0
+    essays_dir = _resolve_named_dir("organvm-v-logos", "public-process/_posts", roots)
+    if essays_dir is None:
+        essays_dir = _resolve_named_dir("", "public-process/_posts", roots)
+    if essays_dir is not None:
+        for md in sorted(essays_dir.glob("*.md")):
+            essay_words += _count_file_words(md)
+
+    corpus_words = 0
+    corpus_target = _resolve_named_dir("meta-organvm", "organvm-corpvs-testamentvm/docs", roots)
+    if corpus_target is None:
+        corpus_target = _resolve_named_dir("", "organvm-corpvs-testamentvm/docs", roots)
+    if corpus_target is not None:
+        for md in sorted(corpus_target.rglob("*.md")):
+            corpus_words += _count_file_words(md)
 
     total = readme_words + essay_words + corpus_words + profile_words
 
@@ -108,24 +248,30 @@ _TEST_PATTERNS = {"test_", "_test.", ".test.", ".spec."}
 _SKIP_DIRS = {".venv", "venv", "node_modules", "__pycache__", ".git", ".tox", "dist", "build"}
 
 
-def count_code_files(workspace: Path) -> dict:
-    """Count code and test files across the workspace.
+def _count_repo_code(repo_path: Path) -> tuple[int, int, bool]:
+    """Walk a single repo dir; return (code_files, test_files, has_tests_dir)."""
+    code = 0
+    tests = 0
+    has_tests = (repo_path / "tests").is_dir()
+    for path in repo_path.rglob("*"):
+        if not path.is_file():
+            continue
+        if any(skip in path.parts for skip in _SKIP_DIRS):
+            continue
+        if path.suffix in _CODE_EXTENSIONS:
+            code += 1
+            if any(pat in path.name for pat in _TEST_PATTERNS):
+                tests += 1
+    return code, tests, has_tests
 
-    Walks all organ directories counting source files by extension and
-    identifying test files by naming convention.
 
-    Args:
-        workspace: Path to the workspace root (e.g. ~/Workspace).
-
-    Returns:
-        Dict with keys: code_files, test_files, repos_with_tests.
-    """
+def _legacy_count_code_files_filesystem(workspace: Path) -> dict:
+    """Legacy filesystem-walker for code/test file counts. See ``_legacy_count_words_filesystem``."""
     from organvm_engine.organ_config import ORGANS
 
     code_files = 0
     test_files = 0
     repos_with_tests = 0
-
     for organ_info in ORGANS.values():
         organ_dir = workspace / organ_info["dir"]
         if not organ_dir.is_dir():
@@ -133,20 +279,78 @@ def count_code_files(workspace: Path) -> dict:
         for repo_dir in sorted(organ_dir.iterdir()):
             if not repo_dir.is_dir():
                 continue
-            has_tests = (repo_dir / "tests").is_dir()
+            repo_code, repo_tests, has_tests = _count_repo_code(repo_dir)
+            code_files += repo_code
+            test_files += repo_tests
             if has_tests:
                 repos_with_tests += 1
-            for path in repo_dir.rglob("*"):
-                if not path.is_file():
-                    continue
-                # Skip vendored/virtual directories
-                if any(skip in path.parts for skip in _SKIP_DIRS):
-                    continue
-                if path.suffix in _CODE_EXTENSIONS:
-                    code_files += 1
-                    name = path.name
-                    if any(pat in name for pat in _TEST_PATTERNS):
-                        test_files += 1
+    return {
+        "code_files": code_files,
+        "test_files": test_files,
+        "repos_with_tests": repos_with_tests,
+    }
+
+
+def _legacy_count_code_files_per_repo_filesystem(workspace: Path) -> dict[str, dict[str, int]]:
+    """Legacy filesystem-walker per-repo. See ``_legacy_count_words_filesystem``."""
+    from organvm_engine.organ_config import ORGANS
+
+    per_repo: dict[str, dict[str, int]] = {}
+    for organ_info in ORGANS.values():
+        organ_dir = workspace / organ_info["dir"]
+        if not organ_dir.is_dir():
+            continue
+        for repo_dir in sorted(organ_dir.iterdir()):
+            if not repo_dir.is_dir():
+                continue
+            repo_code, repo_tests, _ = _count_repo_code(repo_dir)
+            key = f"{organ_dir.name}/{repo_dir.name}"
+            per_repo[key] = {"code_files": repo_code, "test_files": repo_tests}
+    return per_repo
+
+
+def count_code_files(
+    registry_or_workspace,
+    *,
+    candidates: list[Path] | None = None,
+    workspace: Path | None = None,
+) -> dict:
+    """Count code and test files across the workspace, registry-driven.
+
+    Iterates ``registry["organs"][*]["repositories"]``, resolves each repo's
+    path via the candidate-root probe, and aggregates code/test file counts.
+
+    Args:
+        registry: Loaded registry-v2.json dict.
+        candidates: Priority-ordered list of candidate workspace roots.
+        workspace: Legacy single-root fallback when ``candidates`` is None.
+
+    Returns:
+        Dict with keys: code_files, test_files, repos_with_tests.
+    """
+    if isinstance(registry_or_workspace, (str, Path)):
+        return _legacy_count_code_files_filesystem(Path(registry_or_workspace))
+    registry = registry_or_workspace
+    roots = _normalize_candidates(candidates, workspace)
+
+    code_files = 0
+    test_files = 0
+    repos_with_tests = 0
+
+    for organ_data in registry.get("organs", {}).values():
+        for repo in organ_data.get("repositories", []):
+            if repo.get("implementation_status") == "ARCHIVED":
+                continue
+            name = repo.get("name", "")
+            org_dir = repo.get("org", "")
+            repo_path = _resolve_repo_path(org_dir, name, roots)
+            if repo_path is None:
+                continue
+            repo_code, repo_tests, has_tests = _count_repo_code(repo_path)
+            code_files += repo_code
+            test_files += repo_tests
+            if has_tests:
+                repos_with_tests += 1
 
     return {
         "code_files": code_files,
@@ -155,41 +359,44 @@ def count_code_files(workspace: Path) -> dict:
     }
 
 
-def count_code_files_per_repo(workspace: Path) -> dict[str, dict[str, int]]:
-    """Count code and test files per repository.
+def count_code_files_per_repo(
+    registry_or_workspace,
+    *,
+    candidates: list[Path] | None = None,
+    workspace: Path | None = None,
+) -> dict[str, dict[str, int]]:
+    """Count code and test files per repository, registry-driven.
 
-    Walks all organ directories and counts source/test files for each repo
-    individually, keyed by ``org/repo-name`` (e.g. ``organvm-i-theoria/recursive-engine``).
+    Keys are ``<org>/<repo-name>`` (e.g. ``organvm-i-theoria/recursive-engine``),
+    matching the format ``propagate_repo_metrics`` expects.
 
     Args:
-        workspace: Path to the workspace root (e.g. ~/Workspace).
+        registry: Loaded registry-v2.json dict.
+        candidates: Priority-ordered list of candidate workspace roots.
+        workspace: Legacy single-root fallback when ``candidates`` is None.
 
     Returns:
         Dict mapping ``org/repo-name`` to ``{"code_files": N, "test_files": N}``.
     """
-    from organvm_engine.organ_config import ORGANS
+    if isinstance(registry_or_workspace, (str, Path)):
+        return _legacy_count_code_files_per_repo_filesystem(Path(registry_or_workspace))
+    registry = registry_or_workspace
+    roots = _normalize_candidates(candidates, workspace)
 
     per_repo: dict[str, dict[str, int]] = {}
-
-    for organ_info in ORGANS.values():
-        organ_dir = workspace / organ_info["dir"]
-        if not organ_dir.is_dir():
-            continue
-        for repo_dir in sorted(organ_dir.iterdir()):
-            if not repo_dir.is_dir():
+    for organ_data in registry.get("organs", {}).values():
+        for repo in organ_data.get("repositories", []):
+            if repo.get("implementation_status") == "ARCHIVED":
                 continue
-            repo_code = 0
-            repo_tests = 0
-            for path in repo_dir.rglob("*"):
-                if not path.is_file():
-                    continue
-                if any(skip in path.parts for skip in _SKIP_DIRS):
-                    continue
-                if path.suffix in _CODE_EXTENSIONS:
-                    repo_code += 1
-                    if any(pat in path.name for pat in _TEST_PATTERNS):
-                        repo_tests += 1
-            key = f"{organ_dir.name}/{repo_dir.name}"
+            name = repo.get("name", "")
+            org_dir = repo.get("org", "")
+            if not (name and org_dir):
+                continue
+            repo_path = _resolve_repo_path(org_dir, name, roots)
+            if repo_path is None:
+                continue
+            repo_code, repo_tests, _ = _count_repo_code(repo_path)
+            key = f"{org_dir}/{name}"
             per_repo[key] = {"code_files": repo_code, "test_files": repo_tests}
 
     return per_repo
@@ -223,13 +430,22 @@ def propagate_repo_metrics(registry: dict, per_repo: dict[str, dict[str, int]]) 
     return updated
 
 
-def compute_metrics(registry: dict, workspace: Path | None = None) -> dict:
+def compute_metrics(
+    registry: dict,
+    workspace: Path | None = None,
+    *,
+    candidates: list[Path] | None = None,
+) -> dict:
     """Derive all computable metrics from registry-v2.json.
 
     Args:
         registry: Loaded registry dict.
-        workspace: Optional workspace root for word counting. If provided,
-            word counts are auto-computed and included in the result.
+        workspace: Legacy single-root parameter. Used only when ``candidates``
+            is None.
+        candidates: Priority-ordered list of candidate workspace roots. When
+            provided, the metric walkers probe each root in order (organ-grouped
+            layout first, flat-namespace fallback). Required for environments
+            where the workspace is split across multiple roots.
 
     Returns:
         Dict with computed metrics (total_repos, per_organ, status distribution, etc.).
@@ -270,15 +486,15 @@ def compute_metrics(registry: dict, workspace: Path | None = None) -> dict:
         "implementation_status": dict(sorted(status_dist.items())),
     }
 
-    if workspace is not None:
-        wc = count_words(workspace)
+    if candidates is not None or workspace is not None:
+        wc = count_words(registry, candidates=candidates, workspace=workspace)
         result["word_counts"] = wc
         tw, tw_num, tw_short = format_word_count(wc["total"])
         result["total_words"] = tw
         result["total_words_numeric"] = tw_num
         result["total_words_short"] = tw_short
 
-        cf = count_code_files(workspace)
+        cf = count_code_files(registry, candidates=candidates, workspace=workspace)
         result["code_files"] = cf["code_files"]
         result["test_files"] = cf["test_files"]
         result["repos_with_tests"] = cf["repos_with_tests"]

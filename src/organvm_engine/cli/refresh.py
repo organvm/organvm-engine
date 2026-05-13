@@ -14,6 +14,7 @@ def cmd_refresh(args: argparse.Namespace) -> int:
     from organvm_engine.metrics.calculator import compute_metrics, write_metrics
     from organvm_engine.metrics.vars import build_vars, resolve_targets_from_manifest, write_vars
     from organvm_engine.paths import resolve_workspace as _resolve_workspace
+    from organvm_engine.paths import workspace_root_candidates
 
     dry_run = args.dry_run
     prefix = "[DRY RUN] " if dry_run else ""
@@ -25,10 +26,11 @@ def cmd_refresh(args: argparse.Namespace) -> int:
 
     registry = load_registry(args.registry)
     workspace = _resolve_workspace(args)
+    candidates = workspace_root_candidates(primary=workspace)
     corpus_root = Path(args.registry).parent
 
     # Step 1: Compute metrics
-    computed = compute_metrics(registry, workspace=workspace)
+    computed = compute_metrics(registry, workspace=workspace, candidates=candidates)
     metrics_path = corpus_root / "system-metrics.json"
 
     if not dry_run:

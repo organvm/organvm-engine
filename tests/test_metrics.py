@@ -425,10 +425,11 @@ class TestCountCodeFiles:
 
 class TestComputeMetricsWithWorkspace:
     def test_includes_word_counts(self, registry, tmp_path):
+        # Repo names match the registry-minimal fixture (ORGAN-I has recursive-engine)
         ws = tmp_path / "workspace"
         organ = ws / "organvm-i-theoria"
-        (organ / "repo-a").mkdir(parents=True)
-        (organ / "repo-a" / "README.md").write_text("hello world")
+        (organ / "recursive-engine").mkdir(parents=True)
+        (organ / "recursive-engine" / "README.md").write_text("hello world")
 
         m = compute_metrics(registry, workspace=ws)
         assert "word_counts" in m
@@ -440,11 +441,11 @@ class TestComputeMetricsWithWorkspace:
     def test_includes_code_file_counts(self, registry, tmp_path):
         ws = tmp_path / "workspace"
         organ = ws / "organvm-i-theoria"
-        (organ / "repo-a" / "src").mkdir(parents=True)
-        (organ / "repo-a" / "src" / "main.py").write_text("x = 1")
-        (organ / "repo-a" / "tests").mkdir()
-        (organ / "repo-a" / "tests" / "test_main.py").write_text("pass")
-        (organ / "repo-a" / "README.md").write_text("hello")
+        (organ / "recursive-engine" / "src").mkdir(parents=True)
+        (organ / "recursive-engine" / "src" / "main.py").write_text("x = 1")
+        (organ / "recursive-engine" / "tests").mkdir()
+        (organ / "recursive-engine" / "tests" / "test_main.py").write_text("pass")
+        (organ / "recursive-engine" / "README.md").write_text("hello")
 
         m = compute_metrics(registry, workspace=ws)
         assert "code_files" in m
@@ -456,6 +457,98 @@ class TestComputeMetricsWithWorkspace:
         m = compute_metrics(registry)
         assert "word_counts" not in m
         assert "code_files" not in m
+
+
+class TestRegistryDrivenMultiRoot:
+    """Regression coverage for IRF-OPS-028: split-topology workspace.
+
+    The post-2026-04-20 decomposition left some organs grouped under one root
+    and others under a different root (or flat). The registry-driven walker
+    must find every repo regardless of which root it lives under.
+    """
+
+    def test_finds_repos_across_two_roots(self, registry, tmp_path):
+        # Root A holds ORGAN-I grouped under organ dir; Root B holds META-ORGANVM grouped.
+        root_a = tmp_path / "code-root"
+        root_b = tmp_path / "workspace-root"
+        (root_a / "organvm-i-theoria" / "recursive-engine").mkdir(parents=True)
+        (root_a / "organvm-i-theoria" / "recursive-engine" / "README.md").write_text(
+            "one two three four five",
+        )
+        (root_b / "meta-organvm" / "organvm-engine").mkdir(parents=True)
+        (root_b / "meta-organvm" / "organvm-engine" / "README.md").write_text(
+            "alpha beta gamma",
+        )
+
+        m = compute_metrics(registry, candidates=[root_a, root_b])
+        # 5 words from recursive-engine + 3 from organvm-engine = 8
+        assert m["word_counts"]["readmes"] == 8
+
+    def test_finds_flat_namespace_repos(self, registry, tmp_path):
+        # Repos sit at <root>/<repo-name> without an organ-grouping parent —
+        # this is the post-decomposition flat layout used by ORGAN-III/V/VII.
+        root = tmp_path / "flat-root"
+        (root / "recursive-engine").mkdir(parents=True)
+        (root / "recursive-engine" / "README.md").write_text("a b c")
+        (root / "metasystem-master").mkdir(parents=True)
+        (root / "metasystem-master" / "README.md").write_text("d e")
+        (root / "product-app").mkdir(parents=True)
+        (root / "product-app" / "README.md").write_text("f g h i")
+
+        m = compute_metrics(registry, candidates=[root])
+        assert m["word_counts"]["readmes"] == 9  # 3 + 2 + 4
+
+    def test_organ_grouped_wins_over_flat_when_both_exist(self, registry, tmp_path):
+        # When the same repo name exists both grouped and flat under one root,
+        # the organ-grouped probe should match first (more specific).
+        root = tmp_path / "root"
+        (root / "organvm-i-theoria" / "recursive-engine").mkdir(parents=True)
+        (root / "organvm-i-theoria" / "recursive-engine" / "README.md").write_text("grouped one")
+        (root / "recursive-engine").mkdir(parents=True)
+        (root / "recursive-engine" / "README.md").write_text(
+            "flat one two three four five six seven",
+        )
+
+        m = compute_metrics(registry, candidates=[root])
+        # Should pick organ-grouped (2 words), not flat (8 words)
+        assert m["word_counts"]["readmes"] == 2
+
+    def test_archived_repos_are_skipped(self, registry, tmp_path):
+        # Inject an ARCHIVED entry; the walker must skip it even if a README exists.
+        import copy
+        reg = copy.deepcopy(registry)
+        reg["organs"]["ORGAN-I"]["repositories"].append({
+            "name": "archived-repo",
+            "org": "organvm-i-theoria",
+            "implementation_status": "ARCHIVED",
+        })
+        root = tmp_path / "root"
+        (root / "organvm-i-theoria" / "recursive-engine").mkdir(parents=True)
+        (root / "organvm-i-theoria" / "recursive-engine" / "README.md").write_text("live")
+        (root / "organvm-i-theoria" / "archived-repo").mkdir(parents=True)
+        (root / "organvm-i-theoria" / "archived-repo" / "README.md").write_text(
+            "should not be counted at all",
+        )
+
+        m = compute_metrics(reg, candidates=[root])
+        assert m["word_counts"]["readmes"] == 1  # only 'live' from recursive-engine
+
+    def test_code_files_counted_via_registry(self, registry, tmp_path):
+        root_a = tmp_path / "a"
+        root_b = tmp_path / "b"
+        # recursive-engine under root_a
+        (root_a / "organvm-i-theoria" / "recursive-engine" / "src").mkdir(parents=True)
+        (root_a / "organvm-i-theoria" / "recursive-engine" / "src" / "main.py").write_text("x=1")
+        (root_a / "organvm-i-theoria" / "recursive-engine" / "tests").mkdir()
+        (root_a / "organvm-i-theoria" / "recursive-engine" / "tests" / "test_x.py").write_text("p")
+        # organvm-engine under root_b
+        (root_b / "meta-organvm" / "organvm-engine").mkdir(parents=True)
+        (root_b / "meta-organvm" / "organvm-engine" / "app.ts").write_text("export {}")
+
+        m = compute_metrics(registry, candidates=[root_a, root_b])
+        assert m["code_files"] == 3  # main.py + test_x.py + app.ts
+        assert m["test_files"] == 1
+        assert m["repos_with_tests"] == 1
 
 
 class TestBuildPatternsComputedFirst:

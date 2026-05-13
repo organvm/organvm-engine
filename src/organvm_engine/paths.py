@@ -150,3 +150,42 @@ def resolve_workspace(
         return _coerce_path(env).resolve()
     default = _DEFAULT_WORKSPACE
     return default if default.is_dir() else None
+
+
+def workspace_root_candidates(
+    primary: Path | None = None,
+) -> list[Path]:
+    """Return priority-ordered list of candidate workspace roots that exist on disk.
+
+    Probe order: explicit ``primary`` (typically ``resolve_workspace(args)``),
+    then ``ORGANVM_WORKSPACE_DIR`` env, then ``~/Code/organvm`` (flat
+    repo namespace), then ``~/Code`` (organ-grouped layout), then
+    ``~/Workspace`` (legacy organ-grouped layout).
+
+    Used by metrics walkers to resolve per-repo filesystem locations across
+    the post-decomposition split topology (some organs grouped at one root,
+    others flat or grouped elsewhere).
+    """
+    home = Path.home()
+    raw_candidates: list[Path] = []
+    if primary is not None:
+        raw_candidates.append(_coerce_path(primary))
+    env = os.environ.get("ORGANVM_WORKSPACE_DIR")
+    if env:
+        raw_candidates.append(_coerce_path(env))
+    raw_candidates.extend([
+        home / "Code" / "organvm",
+        home / "Code",
+        home / "Workspace",
+    ])
+    seen: set[Path] = set()
+    result: list[Path] = []
+    for cand in raw_candidates:
+        resolved = cand.resolve()
+        if resolved in seen:
+            continue
+        if not resolved.is_dir():
+            continue
+        seen.add(resolved)
+        result.append(resolved)
+    return result

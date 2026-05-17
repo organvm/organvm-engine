@@ -154,6 +154,24 @@ def test_scan_organ_pair_no_registry():
     report = scan_organ_pair("I", "III")
     assert report["correspondences"] == []
     assert "No registry" in report["summary"]
+    # Schema parity with success-case: every caller can sort/filter by these
+    # without KeyError. Regression guard for the `organvm trivium scan --all`
+    # crash that occurred when registry was unresolved.
+    for key in ("organ_a", "organ_b", "by_type", "count", "avg_strength"):
+        assert key in report, f"early-return missing key: {key}"
+    assert report["count"] == 0
+    assert report["avg_strength"] == 0.0
+    assert report["by_type"] == {}
+
+
+def test_scan_all_pairs_no_registry_sortable():
+    from organvm_engine.trivium.detector import scan_all_pairs
+
+    results = scan_all_pairs()
+    assert len(results) == 28
+    # Must not raise — this is the exact callsite that crashed in
+    # cli/trivium.py:103 when avg_strength was missing from early-return.
+    sorted(results, key=lambda x: -x["avg_strength"])
 
 
 def test_scan_organ_pair_meta():

@@ -411,6 +411,9 @@ def scan_organ_pair(
             "organ_a": organ_a_key,
             "organ_b": organ_b_key,
             "correspondences": [],
+            "by_type": {},
+            "count": 0,
+            "avg_strength": 0.0,
             "summary": "No registry data available",
         }
 

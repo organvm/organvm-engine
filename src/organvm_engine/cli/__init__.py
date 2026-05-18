@@ -1283,8 +1283,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sess_sub = sess.add_subparsers(dest="subcommand")
 
-    sess_sub.add_parser("projects", help="List Claude Code project directories")
-    sess_sub.add_parser("agents", help="Show session inventory across all agents")
+    sess_sub.add_parser(
+        "projects",
+        help="List Claude Code project directories",
+        description=(
+            "List every Claude Code project directory and its session count. "
+            "Decodes the encoded cwd from `~/.claude/projects/<slug>/*.jsonl` "
+            "and reports decoded path + count."
+        ),
+    )
+    sess_sub.add_parser(
+        "agents",
+        help="Show session inventory across all agents",
+        description=(
+            "Per-agent counts and total size across Claude, Codex, Gemini, "
+            "and OpenCode session stores."
+        ),
+    )
 
     sess_list = sess_sub.add_parser("list", help="List sessions with metadata")
     sess_list.add_argument(
@@ -1293,9 +1308,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Filter to specific project directory name or path substring",
     )
     sess_list.add_argument(
+        "--directory",
+        default=None,
+        help=(
+            "Filter by exact absolute working directory (not a substring). "
+            "Most precise filter; safe when project names share a substring."
+        ),
+    )
+    sess_list.add_argument(
         "--agent",
         default=None,
-        choices=["claude", "gemini", "codex"],
+        choices=["claude", "gemini", "codex", "opencode"],
         help="Filter to specific agent (default: all)",
     )
     sess_list.add_argument(

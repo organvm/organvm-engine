@@ -323,6 +323,11 @@ class TestDiscovery:
         monkeypatch.setattr("organvm_engine.session.agents.CODEX_SESSIONS_DIR", codex_dir)
         monkeypatch.setattr("organvm_engine.session.agents.CODEX_ARCHIVED_DIR", tmp_path / "archived")
 
+        # OpenCode (stub a missing DB so the adapter returns []).
+        monkeypatch.setattr(
+            "organvm_engine.session.agents.OPENCODE_DB", tmp_path / "opencode.db",
+        )
+
         sessions = discover_all_sessions()
         assert len(sessions) == 3
         agents = {s.agent for s in sessions}
@@ -351,6 +356,7 @@ class TestDiscovery:
         monkeypatch.setattr("organvm_engine.session.agents.GEMINI_TMP_DIR", tmp_path / "nope2")
         monkeypatch.setattr("organvm_engine.session.agents.CODEX_SESSIONS_DIR", tmp_path / "nope3")
         monkeypatch.setattr("organvm_engine.session.agents.CODEX_ARCHIVED_DIR", tmp_path / "nope4")
+        monkeypatch.setattr("organvm_engine.session.agents.OPENCODE_DB", tmp_path / "nope5.db")
 
         assert discover_all_sessions() == []
 

@@ -76,13 +76,40 @@ def cmd_session_agents(args: argparse.Namespace) -> int:
     print(f"{'Total':<10} {total_sessions:>8} {_human_size(total_bytes):>10}")
     print()
     print("Storage locations:")
-    print("  Claude: ~/.claude/projects/<encoded-path>/*.jsonl")
-    print("  Gemini: ~/.gemini/tmp/<project>/chats/session-*.json")
-    print("  Codex:  ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl")
-    print("          ~/.codex/archived_sessions/rollout-*.jsonl")
+    print("  Claude:   ~/.claude/projects/<encoded-cwd>/*.jsonl")
+    print("  Gemini:   ~/.local/share/gemini/tmp/<slug>/chats/session-*.{json,jsonl}")
+    print("            (slug ← projects.json reverse map of cwd)")
+    print("  Codex:    ~/.local/share/codex/sessions/YYYY/MM/DD/rollout-*.jsonl")
+    print("            ~/.local/share/codex/archived_sessions/rollout-*.jsonl")
+    print("  OpenCode: ~/.local/share/opencode/opencode.db  (SQLite; `session.directory` column)")
     print()
-    print("All local-only. Back up ~/.claude, ~/.gemini, ~/.codex for durability.")
+    print("All local-only. Back up ~/.local/share/{claude,codex,gemini,opencode} for durability.")
     return 0
+
+
+def _print_multi_agent_sessions(
+    sessions, limit: int, *, all_agents: bool = False,
+) -> None:
+    """Render the shared 'multi-agent listing' table."""
+    hdr = (
+        f"{'Date':<12} {'Agent':<8} {'Size':>8} "
+        f"{'Dur':>6} {'ID (first 8)':<10} {'Project'}"
+    )
+    print(hdr)
+    print("-" * 80)
+    for s in sessions:
+        date = s.date_str
+        dur = f"{s.duration_minutes}m" if s.duration_minutes else "?"
+        short_id = s.session_id[:8]
+        proj = s.project_dir[:35]
+        print(f"{date:<12} {s.agent:<8} {s.size_human:>8} {dur:>6} {short_id:<10} {proj}")
+
+    shown = len(sessions)
+    if all_agents:
+        suffix = " (use --limit to see more)" if limit and shown == limit else ""
+        print(f"\nShowing {shown} sessions across all agents{suffix}")
+    else:
+        print(f"\nShowing {shown} sessions")
 
 
 def cmd_session_list(args: argparse.Namespace) -> int:
@@ -90,6 +117,24 @@ def cmd_session_list(args: argparse.Namespace) -> int:
     project = getattr(args, "project", None)
     limit = getattr(args, "limit", 20)
     agent = getattr(args, "agent", None)
+    directory = getattr(args, "directory", None)
+
+    # An exact --directory filter is the most precise signal — always route
+    # through the multi-agent pipeline so all four stores honor it.
+    if directory:
+        sessions = discover_all_sessions(
+            agent=agent,
+            project_filter=project,
+            directory_filter=directory,
+        )
+        if not sessions:
+            scope = agent or "any agent"
+            print(f"No sessions found for directory '{directory}' ({scope}).")
+            return 0
+        if limit:
+            sessions = sessions[:limit]
+        _print_multi_agent_sessions(sessions, limit)
+        return 0
 
     if agent and agent != "claude":
         # Multi-agent listing via agents module
@@ -99,17 +144,7 @@ def cmd_session_list(args: argparse.Namespace) -> int:
             return 0
         if limit:
             sessions = sessions[:limit]
-
-        print(f"{'Date':<12} {'Agent':<8} {'Size':>8} {'Dur':>6} {'ID (first 8)':<10} {'Project'}")
-        print("-" * 80)
-        for s in sessions:
-            date = s.date_str
-            dur = f"{s.duration_minutes}m" if s.duration_minutes else "?"
-            short_id = s.session_id[:8]
-            proj = s.project_dir[:35]
-            print(f"{date:<12} {s.agent:<8} {s.size_human:>8} {dur:>6} {short_id:<10} {proj}")
-
-        print(f"\nShowing {len(sessions)} sessions")
+        _print_multi_agent_sessions(sessions, limit)
         return 0
 
     if agent is None:
@@ -119,23 +154,7 @@ def cmd_session_list(args: argparse.Namespace) -> int:
             # Show multi-agent view
             if limit:
                 all_sessions = all_sessions[:limit]
-
-            hdr = (
-                f"{'Date':<12} {'Agent':<8} {'Size':>8} "
-                f"{'Dur':>6} {'ID (first 8)':<10} {'Project'}"
-            )
-            print(hdr)
-            print("-" * 80)
-            for s in all_sessions:
-                date = s.date_str
-                dur = f"{s.duration_minutes}m" if s.duration_minutes else "?"
-                short_id = s.session_id[:8]
-                proj = s.project_dir[:35]
-                print(f"{date:<12} {s.agent:<8} {s.size_human:>8} {dur:>6} {short_id:<10} {proj}")
-
-            shown = len(all_sessions)
-            suffix = " (use --limit to see more)" if limit and shown == limit else ""
-            print(f"\nShowing {shown} sessions across all agents{suffix}")
+            _print_multi_agent_sessions(all_sessions, limit, all_agents=True)
             return 0
 
     # Claude-only (legacy path, or --agent claude)

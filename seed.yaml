@@ -102,6 +102,94 @@ implements:
   - concept: AMMOI
     zettel_source: "post-flood/archive_original/.zettel-index.yaml#AMMOI"
     aspect: "metrics/organism.py (SystemOrganism) + corpus/ (knowledge graph) — living structural index"
+  # --- SPEC-discovered concepts (wired S-Constitutional-Wiring, 2026-04-20) ---
+  - concept: variable_resolution
+    zettel_source: "post-flood/specs/variable-resolution/grounding.md"
+    aspect: "metrics/vars.py — explicit HTML-marker variable binding system for metrics propagation"
+  - concept: temporal_metrics
+    zettel_source: "post-flood/specs/temporal-metrics/grounding.md"
+    aspect: "metrics/timeseries.py + metrics/temporal.py — observation-based temporal recording and windowed queries"
+  - concept: workspace_topology
+    zettel_source: "post-flood/specs/SPEC-012/grounding.md"
+    aspect: "git/superproject.py — workspace reproduction, submodule topology, and drift detection"
+  - concept: agent_swarm_topology
+    zettel_source: "post-flood/specs/SPEC-013/grounding.md"
+    aspect: "coordination/ — claims registry + tool checkout line for concurrent agent operation"
+  - concept: governance_predicates
+    zettel_source: "post-flood/specs/SPEC-025-governance-predicates/grounding.md"
+    aspect: "governance/dictums.py + governance/audit.py — machine-readable constitutional laws and predicate evaluation"
+  - concept: generative_testament
+    zettel_source: "post-flood/specs/generative-testament/grounding.md"
+    aspect: "fossil/ — hash-linked archaeological record classified by Jungian archetype, testament bridge"
+  - concept: zettelkasten_protocol
+    zettel_source: "post-flood/specs/SPEC-020-zettelkasten-protocol/grounding.md"
+    aspect: "corpus/scanner.py — zettelkasten sidecar parsing + cross-trunk concept extraction"
+  - concept: verification_plan
+    zettel_source: "post-flood/specs/SPEC-007/grounding.md"
+    aspect: "tests/ + metrics/gates.py — pytest suite, soak-test infrastructure, quality gate enforcement"
+  - concept: pipeline_stages
+    zettel_source: "post-flood/specs/SPEC-010/grounding.md"
+    aspect: "atoms/ — 5-stage pipeline: atomize → narrate → link → reconcile → fanout"
+  - concept: graph_indices
+    zettel_source: "post-flood/specs/graph-indices/grounding.md"
+    aspect: "governance/dependency_graph.py + metrics/indices.py — directed produces/consumes graph with edge indexing"
+  - concept: functional_taxonomy
+    zettel_source: "post-flood/specs/functional-taxonomy/grounding.md"
+    aspect: "distill/taxonomy.py — 15 operational patterns with regex/keyword/category classification signals"
+  - concept: era_model
+    zettel_source: "post-flood/specs/era-model/grounding.md"
+    aspect: "governance/eras.py — temporal epoch tracking with named era definitions (ERA-001 through ERA-005)"
+  - concept: system_dynamics
+    zettel_source: "post-flood/specs/SPEC-011/grounding.md"
+    aspect: "metrics/organism.py — SystemOrganism computing health pulse across 8 organs"
+  - concept: ammoi_reconciliation
+    zettel_source: "post-flood/specs/ammoi-reconciliation/grounding.md"
+    aspect: "corpus/scanner.py + metrics/organism.py — cross-source concept reconciliation from constitutional transcripts"
+  - concept: event_spine
+    zettel_source: "post-flood/specs/event-spine/grounding.md"
+    aspect: "dispatch/ — event payload validation, cascade routing, and cross-organ event delivery"
+  - concept: heartbeat_affect
+    zettel_source: "post-flood/specs/heartbeat-affect/grounding.md"
+    aspect: "metrics/heartbeat.py — GestaltState computation (THRIVING/COHERENT/STRAINED/BRITTLE)"
+  - concept: evolution_law
+    zettel_source: "post-flood/specs/SPEC-008/grounding.md"
+    aspect: "governance/evolution.py — change classification and migration rule enforcement (EVOL-001 through EVOL-003)"
+  - concept: logical_specification
+    zettel_source: "post-flood/specs/SPEC-004/grounding.md"
+    aspect: "governance/conformance.py + governance/state_machine.py — conformance checking against promotion spec"
+  - concept: invariant_register
+    zettel_source: "post-flood/specs/SPEC-003/grounding.md"
+    aspect: "governance/invariants.py — constitutional invariant validators (INV-000-002 through INV-000-005)"
+  - concept: architectural_specification
+    zettel_source: "post-flood/specs/SPEC-005/grounding.md"
+    aspect: "governance/sanctions.py + organ_config.py — or-else sanctions (VIOL-001 through VIOL-007) + 8-organ architecture"
+  - concept: agent_authority_matrix
+    zettel_source: "post-flood/specs/SPEC-017/grounding.md"
+    aspect: "governance/authority.py — four authority levels (READ/PROPOSE/MUTATE/APPROVE) with scope binding"
+  - concept: architectural_patterns
+    zettel_source: "post-flood/specs/SPEC-009/grounding.md"
+    aspect: "governance/interrogation.py — 7-dimension structural diagnostic (DIAG-001 through DIAG-007)"
+  - concept: resource_compute_constraints
+    zettel_source: "post-flood/specs/SPEC-014/grounding.md"
+    aspect: "coordination/tool_lock.py + coordination/lifecycle.py — tool checkout line enforcing resource constraints"
+  - concept: escalation_attention_policy
+    zettel_source: "post-flood/specs/SPEC-015/grounding.md"
+    aspect: "session/debrief.py — session debrief and escalation policy (ESCL-005)"
+  - concept: epistemic_routing
+    zettel_source: "post-flood/specs/SPEC-016/grounding.md"
+    aspect: "contextmd/generator.py — context injection and epistemic routing across workspace repos (EPIS-003)"
+  - concept: traceability_matrix
+    zettel_source: "post-flood/specs/SPEC-006/grounding.md"
+    aspect: "corpus/ — concept-to-implementation scanning + MCP corpus_trace tool as live trace matrix"
+  - concept: system_manifestation
+    zettel_source: "post-flood/specs/SPEC-019-system-manifestation/grounding.md"
+    aspect: "contextmd/ — system context auto-generation rendering state into CLAUDE.md/GEMINI.md/AGENTS.md"
+  - concept: process_sequence_governance
+    zettel_source: "post-flood/specs/SPEC-023-process-sequence-governance/grounding.md"
+    aspect: "governance/state_machine.py + coordination/lifecycle.py — promotion sequencing + agent lifecycle phases"
+  - concept: dispersio_formalis
+    zettel_source: "post-flood/specs/SPEC-022-dispersio-formalis/grounding.md"
+    aspect: "ledger/digest.py + ledger/tiers.py — event batch syndication summaries with tier-based routing"
 
 consumes:
   - type: registry

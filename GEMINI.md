@@ -34,7 +34,7 @@
 ### Governance
 - *Standard ORGANVM governance applies*
 
-*Last synced: 2026-05-17T20:53:33Z*
+*Last synced: 2026-05-23T00:26:31Z*
 
 ## Active Handoff Protocol
 
@@ -93,28 +93,28 @@ Linked skills: SOP-TRIADIC-REVIEW-PROTOCOL, cicd-resilience-and-recovery, contin
 
 ## Task Queue (from pipeline)
 
-**245** pending tasks | Last pipeline: unknown
+**222** pending tasks | Last pipeline: unknown
 
+- `e5543c56458b` /Users/4jp/Code/organvm/organvm-engine/src/organvm_engine/cli/session.py — Add `cmd_session_digest(args)` function after [chezmoi, pytest, rollup]
+- `439d2089820b` /Users/4jp/Code/organvm/organvm-engine/src/organvm_engine/cli/__init__.py — Register subparser (~line 1500): `sess_sub.a [chezmoi, pytest, rollup]
+- `2d23ae5722a3` /Users/4jp/Code/organvm/organvm-engine/tests/test_session_digest.py — New test file. Fixtures: synthetic day with one su [chezmoi, pytest, rollup]
 - `cd2642802178` organvm-engine/src/organvm_engine/contextmd/generator.py — Wrap 3 error returns in AUTO markers [bash, pytest, python]
 - `447a3e18398d` organvm-engine/src/organvm_engine/contextmd/sync.py — Add error-line cleanup regex [bash, pytest, python]
 - `4b7711e57972` concept — Named theoretical construct (AMMOI, SVSE, Formation Protocol, etc.) [node, pytest]
 - `424e33f0a45e` spec — Formal specification (SPEC-000 through SPEC-023, named specs) [node, pytest]
 - `73273b8df7b8` transcript — Raw Q&A conversation (Layer 1) [node, pytest]
-- `03718496fea1` document — Extracted module, research paper, SOP, standard (existing type) [node, pytest]
-- `cc2e48773e31` organvm-engine/src/organvm_engine/ontology/relations.py:27 — RelationType` enum (8 types) — extend with DEFINES, REFEREN [node, pytest]
-- `320218b129b8` organvm-engine/src/organvm_engine/ontology/relations.py:44 — Relation` dataclass pattern (source_uid, target_uid, relati [node, pytest]
-- ... and 237 more
+- ... and 214 more
 
-Cross-organ links: 264 | Top tags: `mcp`, `python`, `rollup`, `chezmoi`, `bash`
+Cross-organ links: 168 | Top tags: `mcp`, `python`, `rollup`, `chezmoi`, `bash`
 
 Run: `organvm atoms pipeline --write && organvm atoms fanout --write`
 
 
 ## System Density (auto-generated)
 
-AMMOI: 25% | Edges: 0 | Tensions: 0 | Clusters: 0 | Adv: 27 | Events(24h): 37445
+AMMOI: 25% | Edges: 0 | Tensions: 0 | Clusters: 0 | Adv: 27 | Events(24h): 37975
 Structure: 8 organs / 148 repos / 1654 components (depth 17) | Inference: 0% | Organs: META-ORGANVM:63%, ORGAN-I:53%, ORGAN-II:48%, ORGAN-III:54% +5 more
-Last pulse: 2026-05-17T20:53:14 | Δ24h: n/a | Δ7d: n/a
+Last pulse: 2026-05-23T00:26:28 | Δ24h: n/a | Δ7d: n/a
 
 
 ## Dialect Identity (Trivium)
@@ -128,7 +128,7 @@ Scan: `organvm trivium scan META <OTHER>` | Matrix: `organvm trivium matrix` | S
 
 ## Logos Documentation Layer
 
-**Status:** MISSING | **Symmetry:** 0.0 (VACUUM)
+**Status:** ACTIVE | **Symmetry:** 0.5 (DREAM)
 
 Nature demands a documentation counterpart. This formation maintains its narrative record in `docs/logos/`.
 
@@ -143,9 +143,10 @@ Nature demands a documentation counterpart. This formation maintains its narrati
 
 - **[Public Essay](https://organvm-v-logos.github.io/public-process/)** — System-wide narrative entry.
 
-*Compliance: Formation is currently void.*
+*Compliance: Record exists without implementation.*
 
 <!-- ORGANVM:AUTO:END -->
+
 
 
 

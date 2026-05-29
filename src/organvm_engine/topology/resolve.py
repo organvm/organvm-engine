@@ -9,6 +9,8 @@ Query types:
 
 from __future__ import annotations
 
+import contextlib
+
 from organvm_engine.topology.cache import TopologyCache, build_topology, load_cache, save_cache
 
 
@@ -63,8 +65,7 @@ def _ensure_cache() -> TopologyCache:
 
     # Build fresh and save for next time
     cache = build_topology()
-    try:
+    # Cache write failure is not fatal.
+    with contextlib.suppress(OSError):
         save_cache(cache)
-    except OSError:
-        pass  # Cache write failure is not fatal
     return cache

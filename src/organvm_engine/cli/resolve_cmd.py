@@ -18,7 +18,7 @@ def cmd_resolve(args: argparse.Namespace) -> int:
             json.dump(paths, sys.stdout, indent=2)
             print()
         else:
-            for name, path in sorted(paths.items()):
+            for _name, path in sorted(paths.items()):
                 print(path)
         return 0
 

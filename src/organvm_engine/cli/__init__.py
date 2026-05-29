@@ -3290,7 +3290,7 @@ def main() -> int:
             "build": cmd_topology_build,
         }
         sub_cmd = getattr(args, "subcommand", None)
-        handler = topo_dispatch.get(sub_cmd)
+        handler = topo_dispatch.get(sub_cmd) if sub_cmd else None
         if handler:
             return handler(args)
         print("Usage: organvm topology build [--write]", file=sys.stderr)

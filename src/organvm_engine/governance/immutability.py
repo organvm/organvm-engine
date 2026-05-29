@@ -79,8 +79,8 @@ def validate_constitutional_locks(
 
     # Determine amendments path
     if amendments_path is None:
-        amendments_path = rules_path.parent / locks.get(
-            "amendment_log", "governance-amendments.jsonl",
+        amendments_path = rules_path.parent / str(
+            locks.get("amendment_log", "governance-amendments.jsonl"),
         )
 
     amendments = load_amendments(amendments_path)

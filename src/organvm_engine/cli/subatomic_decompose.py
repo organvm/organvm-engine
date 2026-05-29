@@ -138,7 +138,7 @@ def _decompose(text: str, parent_session: str, min_bytes: int) -> list[SubAtomCa
                 source_lines=(start, end),
                 commit_refs=_detect_commits(segment),
                 decision_signals=_detect_decisions(segment),
-            )
+            ),
         )
     return candidates
 
@@ -176,7 +176,7 @@ def cmd_subatomic_decompose(args) -> int:
                 },
                 indent=2,
             )
-            + "\n"
+            + "\n",
         )
         return 0
 

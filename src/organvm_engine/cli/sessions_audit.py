@@ -176,7 +176,7 @@ def cmd_sessions_audit(args) -> int:
                 },
                 indent=2,
             )
-            + "\n"
+            + "\n",
         )
         return 0
 

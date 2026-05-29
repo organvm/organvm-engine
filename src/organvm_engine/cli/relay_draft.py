@@ -230,7 +230,7 @@ def cmd_relay_draft(args) -> int:
                 },
                 indent=2,
             )
-            + "\n"
+            + "\n",
         )
     else:
         print(f"Relay validation — {path.name}")

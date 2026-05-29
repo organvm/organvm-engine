@@ -214,7 +214,6 @@ from organvm_engine.cli.ontologia import (
     cmd_ontologia_tensions,
 )
 from organvm_engine.cli.organism import cmd_organism, cmd_organism_snapshot
-from organvm_engine.cli.resolve_cmd import cmd_resolve, cmd_topology_build
 from organvm_engine.cli.pitch import cmd_pitch_generate, cmd_pitch_sync
 from organvm_engine.cli.plans import (
     cmd_plans_atomize,
@@ -253,6 +252,7 @@ from organvm_engine.cli.registry import (
     cmd_registry_update,
     cmd_registry_validate,
 )
+from organvm_engine.cli.resolve_cmd import cmd_resolve, cmd_topology_build
 from organvm_engine.cli.seed import (
     cmd_seed_discover,
     cmd_seed_graph,
@@ -3290,7 +3290,7 @@ def main() -> int:
             "build": cmd_topology_build,
         }
         sub_cmd = getattr(args, "subcommand", None)
-        handler = topo_dispatch.get(sub_cmd)
+        handler = topo_dispatch.get(sub_cmd) if sub_cmd else None
         if handler:
             return handler(args)
         print("Usage: organvm topology build [--write]", file=sys.stderr)

@@ -184,7 +184,7 @@ def cmd_memory_triangulate(args) -> int:
                 location_count=count,
                 risk_level=risk,
                 locations=locations,
-            )
+            ),
         )
 
     strict = bool(getattr(args, "strict", False))
@@ -202,7 +202,7 @@ def cmd_memory_triangulate(args) -> int:
                 },
                 indent=2,
             )
-            + "\n"
+            + "\n",
         )
         return 0
 
@@ -223,7 +223,7 @@ def cmd_memory_triangulate(args) -> int:
         irf = "✓" if e.in_irf else "·"
         git = "✓" if e.in_git else "·"
         print(
-            f"{e.identifier:<{col_id}} {e.risk_level:<{col_risk}}  {mem}   {irf}   {git}    {e.location_count}"
+            f"{e.identifier:<{col_id}} {e.risk_level:<{col_risk}}  {mem}   {irf}   {git}    {e.location_count}",
         )
 
     ok = sum(1 for e in entries if e.risk_level == "OK")

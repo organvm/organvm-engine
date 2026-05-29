@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 import pytest
 
@@ -15,6 +16,9 @@ from organvm_engine.pulse.rhythm import (
     pulse_history,
     pulse_once,
 )
+
+# A timestamp safely inside the 30-day pulse_history window (relative, never rots).
+_RECENT_TS = datetime.now(timezone.utc).isoformat()
 
 
 @pytest.fixture(autouse=True)
@@ -138,7 +142,7 @@ class TestPulseHistory:
         from organvm_engine.pulse.ammoi import _append_history
 
         _append_history(AMMOI(
-            timestamp="2026-04-12T10:00:00Z",
+            timestamp=_RECENT_TS,
             system_density=0.5,
         ))
         result = pulse_history()

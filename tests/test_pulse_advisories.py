@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 
 from organvm_engine.pulse.advisories import (
@@ -13,6 +15,9 @@ from organvm_engine.pulse.advisories import (
     read_advisories,
     store_advisories,
 )
+
+# A validation timestamp inside the 30-day staleness window (relative, never rots).
+_RECENT_TS = datetime.now(timezone.utc).isoformat()
 
 
 @pytest.fixture(autouse=True)
@@ -81,7 +86,7 @@ class TestBuildRepoState:
             "ci_workflow": True,
             "platinum_status": True,
             "implementation_status": "ACTIVE",
-            "last_validated": "2026-04-10T00:00:00Z",
+            "last_validated": _RECENT_TS,
         }
         state = _build_repo_state(repo)
         assert state["promotion_status"] == "CANDIDATE"

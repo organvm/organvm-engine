@@ -1,6 +1,7 @@
 """Tests for ontologia state snapshot bridge."""
 
 import json
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,9 @@ from organvm_engine.ontologia.snapshots import (
     create_system_snapshot,
     detect_drift,
 )
+
+# A snapshot date safely inside the 30-day prune window (relative, never rots).
+_RECENT = (date.today() - timedelta(days=5)).isoformat()
 
 
 @pytest.fixture
@@ -136,7 +140,7 @@ class TestDetectDrift:
 
         # Rename file to simulate earlier date (must be within 30-day prune window)
         old_file = list(snapshots_dir.glob("*.json"))[0]
-        old_file.rename(snapshots_dir / "snapshot-2026-04-10.json")
+        old_file.rename(snapshots_dir / f"snapshot-{_RECENT}.json")
 
         create_system_snapshot(registry_file, snapshots_dir)
 
@@ -154,7 +158,7 @@ class TestDetectDrift:
         registry_file.write_text(json.dumps(reg))
 
         old_file = list(snapshots_dir.glob("*.json"))[0]
-        old_file.rename(snapshots_dir / "snapshot-2026-04-10.json")
+        old_file.rename(snapshots_dir / f"snapshot-{_RECENT}.json")
 
         create_system_snapshot(registry_file, snapshots_dir)
 
@@ -225,9 +229,9 @@ class TestPruneSnapshots:
     def test_removes_old_snapshots(self, snapshots_dir):
         snapshots_dir.mkdir(parents=True)
         (snapshots_dir / "snapshot-2024-01-01.json").write_text("{}")
-        (snapshots_dir / "snapshot-2026-04-10.json").write_text("{}")
+        (snapshots_dir / f"snapshot-{_RECENT}.json").write_text("{}")
 
         removed = _prune_old_snapshots(snapshots_dir, keep_days=30)
         assert removed == 1
         assert not (snapshots_dir / "snapshot-2024-01-01.json").exists()
-        assert (snapshots_dir / "snapshot-2026-04-10.json").exists()
+        assert (snapshots_dir / f"snapshot-{_RECENT}.json").exists()

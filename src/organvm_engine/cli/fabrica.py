@@ -120,7 +120,12 @@ def cmd_fabrica_catch(args) -> int:
         print(f"Selected vector {target.id} → phase CATCH → HANDOFF")
         return 0
 
-    # Create a new vector
+    # Create a new vector. Reaching here implies --thesis was provided (the
+    # list/select branches above return first); guard explicitly so the type is
+    # narrowed and the contract is self-documenting.
+    if not thesis:
+        print(f"Error: --thesis is required to create a vector for packet {packet_id}", file=sys.stderr)
+        return 1
     organs_str = getattr(args, "organs", None)
     target_organs = [o.strip() for o in organs_str.split(",") if o.strip()] if organs_str else []
     scope = getattr(args, "scope", "medium")

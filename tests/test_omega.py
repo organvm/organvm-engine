@@ -220,10 +220,19 @@ class TestEvaluate:
         assert "organic revenue" in c18.name.lower()
         assert c18.horizon == "H5"
 
-    def test_met_count(self, registry, soak_dir):
-        scorecard = evaluate(registry=registry, soak_dir=soak_dir)
-        # #5, #6, #8, #13, #15 from _KNOWN_MET + #19 (network testament auto-eval)
-        assert scorecard.met_count == 6
+    def test_met_count(self, registry, soak_dir, tmp_path):
+        # Pin workspace_root + corpus_dir to an empty tmp dir so the auto-evaluated
+        # criteria (#19 network testament, #20 sigma-E) read controlled, empty
+        # inputs instead of leaking the real filesystem — keeps the count hermetic.
+        scorecard = evaluate(
+            registry=registry,
+            soak_dir=soak_dir,
+            workspace_root=tmp_path,
+            corpus_dir=tmp_path,
+        )
+        # Exactly the 5 _KNOWN_MET (#5, #6, #8, #13, #15); the auto criteria
+        # (#1/#3/#17/#19/#20) are not MET with empty inputs.
+        assert scorecard.met_count == 5
 
     def test_summary_output(self, registry, soak_dir):
         scorecard = evaluate(registry=registry, soak_dir=soak_dir)

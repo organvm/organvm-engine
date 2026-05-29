@@ -580,7 +580,8 @@ def cmd_session_archive(args: argparse.Namespace) -> int:
     they belong to, creating per-session directories with transcript, prompts,
     review scaffold, metadata, and optionally raw JSONL.
     """
-    from organvm_engine.session.archive import archive_all, archive_session, find_session
+    from organvm_engine.session.archive import archive_all, archive_session
+    # find_session lives in session.parser and is already imported at module scope.
 
     session_id = getattr(args, "session_id", None)
     project = getattr(args, "project", None)

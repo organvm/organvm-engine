@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from pathlib import Path
 
 from organvm_engine.plans.hygiene import (
@@ -216,7 +217,7 @@ class TestSweepCandidates:
             qualified_id="fresh",
             path="/plans/new.md",
             status="active",
-            date="2026-04-14",  # recent
+            date=(date.today() - timedelta(days=2)).isoformat(),  # recent (relative, never rots)
             task_count=5,
             completed_count=0,
             slug="fresh",

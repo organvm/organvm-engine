@@ -22,6 +22,8 @@ htmlcov/
 
 # Clipboard export data (contains personal clipboard history)
 src/organvm_engine/prompts/clipboard/data/
+ai-prompts-clipboard-export.json
+ai-prompts-clipboard-export.md
 
 # MCP tool working directories
 .serena/

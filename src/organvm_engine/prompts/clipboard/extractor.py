@@ -59,6 +59,7 @@ def load_items(db_path: Path | None = None) -> list[ClipboardItem]:
         LEFT JOIN ZAPPLICATIONENTITY a ON i.ZSOURCEAPPLICATION = a.Z_PK
         LEFT JOIN ZITEMDATAENTITY d ON d.ZITEM = i.Z_PK
         WHERE d.ZRAWPASTEBOARDITEMS IS NOT NULL
+          AND i.ZTIMESTAMP IS NOT NULL
         ORDER BY i.ZTIMESTAMP ASC
     """).fetchall()
     conn.close()

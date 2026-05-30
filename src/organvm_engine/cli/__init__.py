@@ -1367,6 +1367,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Preview without writing",
     )
+    sess_archive.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-archive even if already archived (refresh a stale snapshot, "
+        "e.g. a resumed session whose work landed after an earlier archive)",
+    )
 
     sess_export = sess_sub.add_parser(
         "export",

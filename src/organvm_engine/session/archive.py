@@ -291,11 +291,16 @@ def discover_unarchived_sessions(
     project_filter: str | None = None,
     since: str | None = None,
     agent: str | None = None,
+    force: bool = False,
 ) -> list[tuple[Path, SessionMeta]]:
     """Find sessions that have not yet been archived to their project repos.
 
     Returns list of (session_path, meta) tuples for unarchived sessions,
     sorted by date (newest first).
+
+    With ``force=True`` the already-archived filter is dropped, so every
+    session matching the filters is returned for re-archiving (refreshing a
+    stale snapshot of a resumed-then-continued session).
     """
     from organvm_engine.session.agents import discover_all_sessions
 
@@ -333,7 +338,7 @@ def discover_unarchived_sessions(
             seen_projects[project_key] = load_archive_state(project_path)
 
         state = seen_projects[project_key]
-        if meta.session_id not in state:
+        if force or meta.session_id not in state:
             unarchived.append((session_path, meta))
 
     return unarchived
@@ -346,6 +351,7 @@ def archive_all(
     agent: str | None = None,
     dry_run: bool = False,
     include_raw: bool = True,
+    force: bool = False,
 ) -> list[ArchiveResult]:
     """Archive all unprocessed sessions to their project directories.
 
@@ -355,6 +361,7 @@ def archive_all(
         agent: Only archive sessions from this agent (claude/gemini/codex).
         dry_run: Preview without writing.
         include_raw: Copy raw .jsonl files.
+        force: Re-archive sessions even if already archived (refresh stale snapshots).
 
     Returns:
         List of ArchiveResult for each session processed.
@@ -363,6 +370,7 @@ def archive_all(
         project_filter=project_filter,
         since=since,
         agent=agent,
+        force=force,
     )
 
     results: list[ArchiveResult] = []
@@ -371,6 +379,7 @@ def archive_all(
             session_path,
             dry_run=dry_run,
             include_raw=include_raw,
+            force=force,
         )
         results.append(result)
 

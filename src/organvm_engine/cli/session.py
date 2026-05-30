@@ -589,6 +589,7 @@ def cmd_session_archive(args: argparse.Namespace) -> int:
     agent = getattr(args, "agent", None)
     dry_run = getattr(args, "dry_run", False)
     no_raw = getattr(args, "no_raw", False)
+    force = getattr(args, "force", False)
 
     if session_id:
         # Archive a single session
@@ -601,6 +602,7 @@ def cmd_session_archive(args: argparse.Namespace) -> int:
             session_path,
             dry_run=dry_run,
             include_raw=not no_raw,
+            force=force,
         )
 
         if result.error:
@@ -624,6 +626,7 @@ def cmd_session_archive(args: argparse.Namespace) -> int:
         agent=agent,
         dry_run=dry_run,
         include_raw=not no_raw,
+        force=force,
     )
 
     if not results:

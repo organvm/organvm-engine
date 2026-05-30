@@ -112,3 +112,61 @@ class TestArchiveState:
         _save_archive_state(tmp_path, state)
         loaded = load_archive_state(tmp_path)
         assert loaded["session-123"]["slug"] == "test"
+
+
+class TestForceReArchive:
+    """IRF-SYS-243: ``--force`` must bypass the skip-if-exists guard so a
+    resumed-then-continued session's stale archive can be refreshed. The
+    library always supported ``force``; the CLI never threaded it through."""
+
+    @staticmethod
+    def _make_claude_session(tmp_path: Path, session_id: str) -> Path:
+        """Write a minimal parseable Claude session JSONL rooted at tmp_path."""
+        jsonl = tmp_path / f"{session_id}.jsonl"
+        line = {
+            "type": "user",
+            "timestamp": "2026-05-30T10:00:00.000Z",
+            "cwd": str(tmp_path),
+            "gitBranch": "main",
+            "slug": "resumed-dancing-fox",
+            "message": {
+                "role": "user",
+                "content": "A sufficiently long human prompt so the session parses cleanly.",
+            },
+        }
+        jsonl.write_text(json.dumps(line) + "\n", encoding="utf-8")
+        return jsonl
+
+    def _seed_already_archived(self, tmp_path: Path, session_id: str) -> None:
+        from organvm_engine.session.archive import _save_archive_state
+
+        _save_archive_state(
+            tmp_path,
+            {session_id: {"slug": "stale", "archived_at": "2026-05-30T18:13:00+00:00"}},
+        )
+
+    def test_skips_already_archived_without_force(self, tmp_path: Path) -> None:
+        from organvm_engine.session.archive import archive_session
+
+        sid = "resumed-session-noforce"
+        jsonl = self._make_claude_session(tmp_path, sid)
+        self._seed_already_archived(tmp_path, sid)
+
+        result = archive_session(jsonl, dry_run=True)
+
+        assert result.skipped is True
+        assert "Already archived" in result.skip_reason
+
+    def test_force_re_archives_already_archived(self, tmp_path: Path) -> None:
+        from organvm_engine.session.archive import archive_session
+
+        sid = "resumed-session-force"
+        jsonl = self._make_claude_session(tmp_path, sid)
+        self._seed_already_archived(tmp_path, sid)
+
+        result = archive_session(jsonl, dry_run=True, force=True)
+
+        # force bypasses the skip guard — the session is re-processed.
+        assert result.skipped is False
+        assert result.error == ""
+        assert "transcript.md" in result.files_written

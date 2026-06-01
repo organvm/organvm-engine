@@ -35,71 +35,72 @@ class TestValidateContract:
     def test_no_edges_at_all(self):
         seed = {"repo": "test"}
         valid, errors = validate_contract(seed)
-        assert valid
-        assert errors == []
+        assert not valid
+        assert "missing required field 'produces'" in errors
+        assert "missing required field 'consumes'" in errors
 
     def test_bare_string_produces(self):
-        seed = {"produces": ["theory"]}
+        seed = {"produces": ["theory"], "consumes": []}
         valid, errors = validate_contract(seed)
         assert not valid
         assert any("bare string" in e for e in errors)
 
     def test_bare_string_consumes(self):
-        seed = {"consumes": ["data"]}
+        seed = {"produces": [], "consumes": ["data"]}
         valid, errors = validate_contract(seed)
         assert not valid
         assert any("bare string" in e for e in errors)
 
     def test_missing_type_field(self):
-        seed = {"produces": [{"description": "no type"}]}
+        seed = {"produces": [{"description": "no type"}], "consumes": []}
         valid, errors = validate_contract(seed)
         assert not valid
         assert any("missing required field 'type'" in e for e in errors)
 
     def test_empty_type_field(self):
-        seed = {"produces": [{"type": ""}]}
+        seed = {"produces": [{"type": ""}], "consumes": []}
         valid, errors = validate_contract(seed)
         assert not valid
         assert any("must not be empty" in e for e in errors)
 
     def test_whitespace_type_field(self):
-        seed = {"produces": [{"type": "   "}]}
+        seed = {"produces": [{"type": "   "}], "consumes": []}
         valid, errors = validate_contract(seed)
         assert not valid
         assert any("must not be empty" in e for e in errors)
 
     def test_non_string_type(self):
-        seed = {"produces": [{"type": 42}]}
+        seed = {"produces": [{"type": 42}], "consumes": []}
         valid, errors = validate_contract(seed)
         assert not valid
         assert any("must be a string" in e for e in errors)
 
     def test_non_dict_entry(self):
-        seed = {"produces": [42]}
+        seed = {"produces": [42], "consumes": []}
         valid, errors = validate_contract(seed)
         assert not valid
         assert any("expected dict" in e for e in errors)
 
     def test_non_string_source(self):
-        seed = {"consumes": [{"type": "data", "source": 123}]}
+        seed = {"produces": [], "consumes": [{"type": "data", "source": 123}]}
         valid, errors = validate_contract(seed)
         assert not valid
         assert any("'source' must be a string" in e for e in errors)
 
     def test_non_list_consumers(self):
-        seed = {"produces": [{"type": "theory", "consumers": "ORGAN-II"}]}
+        seed = {"produces": [{"type": "theory", "consumers": "ORGAN-II"}], "consumes": []}
         valid, errors = validate_contract(seed)
         assert not valid
         assert any("'consumers' must be a list" in e for e in errors)
 
     def test_produces_not_a_list(self):
-        seed = {"produces": "not a list"}
+        seed = {"produces": "not a list", "consumes": []}
         valid, errors = validate_contract(seed)
         assert not valid
         assert any("'produces' must be a list" in e for e in errors)
 
     def test_consumes_not_a_list(self):
-        seed = {"consumes": {"type": "data"}}
+        seed = {"produces": [], "consumes": {"type": "data"}}
         valid, errors = validate_contract(seed)
         assert not valid
         assert any("'consumes' must be a list" in e for e in errors)
@@ -110,6 +111,7 @@ class TestValidateContract:
                 {"type": "theory"},
                 {"type": "theory"},
             ],
+            "consumes": [],
         }
         valid, errors = validate_contract(seed)
         assert not valid
@@ -117,6 +119,7 @@ class TestValidateContract:
 
     def test_duplicate_consumes_type_and_source(self):
         seed = {
+            "produces": [],
             "consumes": [
                 {"type": "data", "source": "ORGAN-I"},
                 {"type": "data", "source": "ORGAN-I"},
@@ -128,6 +131,7 @@ class TestValidateContract:
 
     def test_same_type_different_source_ok(self):
         seed = {
+            "produces": [],
             "consumes": [
                 {"type": "data", "source": "ORGAN-I"},
                 {"type": "data", "source": "ORGAN-II"},

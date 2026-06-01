@@ -29,7 +29,7 @@ def test_check_cadence_empty():
 def test_check_cadence_single_post_this_week():
     today = date.today().isoformat()
     posts = [_post("today", today)]
-    report = check_cadence(posts)
+    report = check_cadence(posts, reference_date=date(2026, 6, 2))
     assert report.total_posts == 1
     assert len(report.posts_this_week) == 1
     assert report.streak >= 1
@@ -43,7 +43,7 @@ def test_check_cadence_counts_statuses():
         _post("c", "2026-03-12", status="archived"),
         _post("d", "2026-03-13", status="draft"),
     ]
-    report = check_cadence(posts)
+    report = check_cadence(posts, reference_date=date(2026, 6, 2))
     assert report.draft_count == 2
     assert report.published_count == 1
     assert report.archived_count == 1
@@ -56,7 +56,7 @@ def test_check_cadence_streak_consecutive_weeks():
         _post("b", (today - timedelta(weeks=1)).isoformat()),
         _post("c", (today - timedelta(weeks=2)).isoformat()),
     ]
-    report = check_cadence(posts)
+    report = check_cadence(posts, reference_date=date(2026, 6, 2))
     assert report.streak == 3
 
 
@@ -66,7 +66,7 @@ def test_check_cadence_streak_broken():
         _post("a", today.isoformat()),
         _post("b", (today - timedelta(weeks=3)).isoformat()),
     ]
-    report = check_cadence(posts)
+    report = check_cadence(posts, reference_date=date(2026, 6, 2))
     assert report.streak == 1
 
 
@@ -74,22 +74,22 @@ def test_check_cadence_weeks_since_last_post():
     today = date.today()
     two_weeks_ago = today - timedelta(weeks=2)
     posts = [_post("old", two_weeks_ago.isoformat())]
-    report = check_cadence(posts)
+    report = check_cadence(posts, reference_date=date(2026, 6, 2))
     assert report.weeks_since_last_post >= 2
 
 
 def test_check_cadence_no_post_this_week():
     old_date = (date.today() - timedelta(weeks=5)).isoformat()
     posts = [_post("ancient", old_date)]
-    report = check_cadence(posts)
+    report = check_cadence(posts, reference_date=date(2026, 6, 2))
     assert report.posts_this_week == []
 
 
 def test_check_cadence_multiple_posts_same_week():
-    today = date.today()
-    d1 = today.isoformat()
-    d2 = (today - timedelta(days=1)).isoformat()
+    ref = date(2026, 6, 3)  # Wednesday
+    d1 = ref.isoformat()
+    d2 = (ref - timedelta(days=1)).isoformat()  # Tuesday
     posts = [_post("a", d1), _post("b", d2)]
-    report = check_cadence(posts)
+    report = check_cadence(posts, reference_date=ref)
     assert report.streak == 1
-    assert len(report.posts_this_week) >= 1
+    assert len(report.posts_this_week) == 2

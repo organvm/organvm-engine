@@ -105,6 +105,11 @@ def validate_contract(seed_data: dict[str, Any]) -> tuple[bool, list[str]]:
     """
     errors: list[str] = []
 
+    if "produces" not in seed_data:
+        errors.append("missing required field 'produces'")
+    if "consumes" not in seed_data:
+        errors.append("missing required field 'consumes'")
+
     produces = seed_data.get("produces") or []
     consumes = seed_data.get("consumes") or []
 

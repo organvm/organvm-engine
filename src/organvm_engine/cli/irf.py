@@ -99,13 +99,41 @@ def cmd_irf_status(args) -> int:
 
 
 def cmd_irf_stats(args) -> int:
-    """Show summary statistics for the IRF document."""
-    from organvm_engine.irf import irf_stats, parse_irf
+    """Show summary statistics for the IRF document.
+
+    With --write, regenerates the document's `## Statistics` block from the
+    parsed items (derive-don't-copy, IRF-OPS-091). Refuses while the parse is
+    incomplete.
+    """
+    from datetime import date
+
+    from organvm_engine.irf import irf_stats
+    from organvm_engine.irf.parser import parse_irf_diagnostics
+    from organvm_engine.irf.writer import IRFWriteError, regenerate_stats_block, write_in_place
     from organvm_engine.paths import irf_path
 
     path = irf_path()
-    items = parse_irf(path)
+    items, skipped = parse_irf_diagnostics(path)
     stats = irf_stats(items)
+
+    if getattr(args, "write", False):
+        try:
+            mutation = regenerate_stats_block(path, date.today().isoformat())
+        except IRFWriteError as exc:
+            print(f"refused: {exc}", file=sys.stderr)
+            return 1
+        write_in_place(path, mutation.new_text)
+        print(mutation.preview)
+        return 0
+
+    if skipped:
+        print(
+            f"⚠ parse incomplete: {len(skipped)} ID-bearing row(s) unparsed — "
+            "stats below undercount (IRF-OPS-088)",
+            file=sys.stderr,
+        )
+        for lineno, line in skipped[:5]:
+            print(f"    L{lineno}: {line[:90]}", file=sys.stderr)
 
     if getattr(args, "json", False):
         json.dump(stats, sys.stdout, indent=2)
@@ -134,4 +162,68 @@ def cmd_irf_stats(args) -> int:
     for domain, count in sorted(stats["by_domain"].items(), key=lambda x: -x[1]):
         print(f"  {domain:<12} {count}")
 
+    return 0
+
+
+def cmd_irf_add(args) -> int:
+    """Add a new open item row (dry-run by default; --write to mutate)."""
+    from organvm_engine.irf.writer import IRFWriteError, add_item, write_in_place
+    from organvm_engine.paths import irf_path
+
+    path = irf_path()
+    try:
+        mutation = add_item(
+            path,
+            domain=args.domain,
+            action=args.action,
+            priority=args.priority,
+            owner=args.owner,
+            source=args.source,
+            blocker=args.blocker,
+            item_id=args.id,
+        )
+    except IRFWriteError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return 1
+
+    print(mutation.preview)
+    if not args.write:
+        print("(dry-run — pass --write to apply)")
+        return 0
+    write_in_place(path, mutation.new_text)
+    print(f"written: {path}")
+    return 0
+
+
+def cmd_irf_complete(args) -> int:
+    """Complete an open item (dry-run by default; --write to mutate).
+
+    Strikes through the active row in place and appends a DONE ledger row —
+    the additive idiom; nothing is deleted.
+    """
+    from datetime import date
+
+    from organvm_engine.irf.writer import IRFWriteError, complete_item, write_in_place
+    from organvm_engine.paths import irf_path
+
+    path = irf_path()
+    try:
+        mutation = complete_item(
+            path,
+            item_id=args.item_id,
+            note=args.note,
+            session=args.session,
+            date=date.today().isoformat(),
+            done_id=args.done,
+        )
+    except IRFWriteError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return 1
+
+    print(mutation.preview)
+    if not args.write:
+        print("(dry-run — pass --write to apply)")
+        return 0
+    write_in_place(path, mutation.new_text)
+    print(f"written: {path}")
     return 0

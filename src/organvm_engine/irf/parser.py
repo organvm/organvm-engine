@@ -13,6 +13,7 @@ recent closeout ledgers live under the Statistics section.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,11 +46,20 @@ _SECTION_RE = re.compile(r"^(#{2,3})\s+(.+)$")
 
 # Matches a pipe-delimited table row with at least 4 non-separator cells.
 # We accept rows like:  | cell | cell | cell | cell |
-# We reject separator rows like:  | ---- | ---- |
-_ROW_RE = re.compile(r"^\|(.+)\|$")
+# A trailing pipe is optional — hand-appended rows sometimes lack it.
+_ROW_RE = re.compile(r"^\|(.+?)\|?$")
 
 # A separator row contains only hyphens, pipes, colons, and spaces.
 _SEPARATOR_RE = re.compile(r"^[\|\-\:\s]+$")
+
+# Canonical item-ID shape. Letter suffixes (IRF-VAC-001a, DONE-145b) are the
+# sub-item convention used by session "Discovered Items" blocks — they are
+# first-class IDs, not markup noise (was the bulk of the IRF-SYS-182 blind spot).
+_ID_RE = re.compile(r"^(IRF-(?:[A-Z]+-)+\d+[a-z]?|DONE-\d+[a-z]?)$")
+
+# A DONE-ledger reference appearing in the *priority* column marks a row that
+# was completed in place inside an active table (e.g. `| IRF-SKL-004 | DONE-525 | …`).
+_DONE_REF_RE = re.compile(r"^DONE-\d+[a-z]?$")
 
 
 def _cells(raw_row: str) -> list[str]:
@@ -113,13 +123,19 @@ def _parse_active_row(cells: list[str], status: str, section: str) -> IRFItem | 
     )
     item_id = _strip_cell_markup(raw_item_id)
     priority = _clean_priority(raw_priority)
-    # ID must look like IRF-XXX-NNN or DONE-NNN
-    if not re.match(r"^(IRF-(?:[A-Z]+-)+\d+|DONE-\d+)$", item_id):
-        return None
-    # Priority must be P0–P4 (active rows) or empty (completed rows)
-    if not re.match(r"^P[0-4]$", priority):
+    # ID must look like IRF-XXX-NNN[a] or DONE-NNN[a]
+    if not _ID_RE.match(item_id):
         return None
     row_status = status
+    if _DONE_REF_RE.match(priority):
+        # Completed in place inside an active table: the priority column holds
+        # the DONE-ledger reference instead of a P-level.
+        row_status = "completed"
+        source = f"{priority}; {source}" if source else priority
+        priority = ""
+    elif not re.match(r"^P[0-4]$", priority):
+        # Priority must be P0–P4 (active rows) or a DONE-ref (completed in place)
+        return None
     if "~~" in raw_item_id or "~~" in raw_priority or _strip_cell_markup(blocker).lower().startswith("completed"):
         row_status = "completed"
 
@@ -137,18 +153,22 @@ def _parse_active_row(cells: list[str], status: str, section: str) -> IRFItem | 
 
 
 def _parse_completed_row(cells: list[str], section: str) -> IRFItem | None:
-    """Parse a 4-column completed item row.
+    """Parse a completed/ledger item row.
 
-    Expected columns: ID | What | Session | Date
+    Expected columns: ID | What | Session | Date — but short-form rows
+    (ID | What | Date, or even ID | What) appear in hand-appended ledgers,
+    so anything with an ID and at least one more cell is accepted.
     """
-    if len(cells) < 4:
+    if len(cells) < 2:
         return None
     item_id = _strip_cell_markup(cells[0])
     if len(cells) >= 5 and re.match(r"^[A-Z]{2,5}$", _strip_cell_markup(cells[1])):
         what, session = cells[2], cells[3]
-    else:
+    elif len(cells) >= 3:
         what, session = cells[1], cells[2]
-    if not re.match(r"^(IRF-(?:[A-Z]+-)+\d+|DONE-\d+)$", item_id):
+    else:
+        what, session = cells[1], ""
+    if not _ID_RE.match(item_id):
         return None
     return IRFItem(
         id=item_id,
@@ -171,17 +191,30 @@ def parse_irf(path: Path) -> list[IRFItem]:
     """Parse an IRF Markdown file into a list of IRFItem objects.
 
     Returns an empty list if the file does not exist.
-    Unknown / malformed rows are silently skipped.
+    """
+    items, _skipped = parse_irf_diagnostics(path)
+    return items
+
+
+def parse_irf_diagnostics(path: Path) -> tuple[list[IRFItem], list[tuple[int, str]]]:
+    """Parse an IRF Markdown file, also reporting ID-bearing rows that were dropped.
+
+    Returns ``(items, skipped)`` where ``skipped`` is a list of
+    ``(line_number, line_text)`` for table rows whose first cell carries an
+    IRF/DONE id but which produced no item. A non-empty ``skipped`` means the
+    parse is NOT authoritative — callers gating on completeness (stats
+    regeneration, closeout) must refuse until it is empty (IRF-OPS-088).
     """
     if not path.exists():
-        return []
+        return [], []
 
     items: list[IRFItem] = []
+    skipped: list[tuple[int, str]] = []
     current_section = "Preamble"
     current_status = "open"
     parent_status = "open"
 
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         line = line.rstrip()
 
         # Detect ## or ### section headers
@@ -216,16 +249,34 @@ def parse_irf(path: Path) -> list[IRFItem]:
 
         first_cell = _strip_cell_markup(cells[0]) if cells else ""
 
-        # Try to parse as active (6+ cols) or completed ledger format.
-        if current_status == "completed" or re.match(r"^DONE-\d+$", first_cell):
+        # Try to parse as active (6+ cols) or completed ledger format,
+        # falling back to the other shape — section status alone does not
+        # determine row shape (4-cell ledger rows appear in open/blocked
+        # sections, 6-cell rows appear under Completed).
+        if current_status == "completed" or _DONE_REF_RE.match(first_cell):
             item = _parse_completed_row(cells, current_section)
+            if item is None:
+                item = _parse_active_row(cells, current_status, current_section)
         else:
             item = _parse_active_row(cells, current_status, current_section)
+            if item is None:
+                item = _parse_completed_row(cells, current_section)
+                # A short ledger-shaped row outside a Completed section:
+                # completed only if it is a DONE row or struck through;
+                # otherwise inherit the section status.
+                if (
+                    item is not None
+                    and current_status != "completed"
+                    and not (_DONE_REF_RE.match(item.id) or "~~" in cells[0])
+                ):
+                    item = dataclasses.replace(item, status=current_status)
 
         if item is not None:
             items.append(item)
+        elif _ID_RE.match(first_cell):
+            skipped.append((lineno, line))
 
-    return items
+    return items, skipped
 
 
 def irf_stats(items: list[IRFItem]) -> dict:

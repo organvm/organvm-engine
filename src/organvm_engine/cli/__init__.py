@@ -166,6 +166,8 @@ from organvm_engine.cli.indexer import (
     cmd_index_stats,
 )
 from organvm_engine.cli.irf import (
+    cmd_irf_add,
+    cmd_irf_complete,
     cmd_irf_list,
     cmd_irf_stats,
     cmd_irf_status,
@@ -2899,10 +2901,41 @@ def build_parser() -> argparse.ArgumentParser:
     irf_status = irf_sub.add_parser("status", help="Show all fields for a single IRF item")
     irf_status.add_argument("item_id", help="IRF item ID (e.g. IRF-SYS-001)")
 
-    irf_sub.add_parser(
+    irf_stats_p = irf_sub.add_parser(
         "stats",
         help="Show summary statistics for the IRF document",
-    ).add_argument("--json", action="store_true", help="Output JSON")
+    )
+    irf_stats_p.add_argument("--json", action="store_true", help="Output JSON")
+    irf_stats_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Regenerate the document's ## Statistics block from the parse (IRF-OPS-091)",
+    )
+
+    irf_add = irf_sub.add_parser(
+        "add",
+        help="Add a new open item row (dry-run by default)",
+    )
+    irf_add.add_argument("--domain", required=True, help="Domain code (e.g. SYS, OPS)")
+    irf_add.add_argument("--action", required=True, help="Item description")
+    irf_add.add_argument("--priority", default="P2", help="P0–P4 (default P2)")
+    irf_add.add_argument("--owner", default="Agent", help="Owner (default Agent)")
+    irf_add.add_argument("--source", default="", help="Session ID / provenance")
+    irf_add.add_argument("--blocker", default="None", help="Blocker (default None)")
+    irf_add.add_argument("--id", default=None, help="Explicit item ID (default: auto-allocate)")
+    irf_add.add_argument("--write", action="store_true", help="Apply the mutation")
+
+    irf_complete = irf_sub.add_parser(
+        "complete",
+        help="Complete an open item: strike through + append DONE ledger row (dry-run by default)",
+    )
+    irf_complete.add_argument("item_id", help="IRF item ID to complete")
+    irf_complete.add_argument("--note", required=True, help="Completion note for the ledger row")
+    irf_complete.add_argument("--session", required=True, help="Session ID for provenance")
+    irf_complete.add_argument(
+        "--done", default=None, help="Explicit DONE-NNN (default: auto-allocate)",
+    )
+    irf_complete.add_argument("--write", action="store_true", help="Apply the mutation")
 
     # exit-interview — presidential handoff protocol (A9: Alchemical Inheritance)
     ei = sub.add_parser(
@@ -3604,6 +3637,8 @@ def main() -> int:
             "list": cmd_irf_list,
             "status": cmd_irf_status,
             "stats": cmd_irf_stats,
+            "add": cmd_irf_add,
+            "complete": cmd_irf_complete,
         }
         handler = irf_dispatch.get(getattr(args, "subcommand", "") or "")
         if handler:

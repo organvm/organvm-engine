@@ -66,9 +66,9 @@ def _strip_cell_markup(value: str) -> str:
 
 
 def _clean_priority(value: str) -> str:
-    """Return the first P0-P3 token from a priority cell, ignoring markup."""
+    """Return the first P0-P4 token from a priority cell, ignoring markup."""
     cleaned = _strip_cell_markup(value)
-    match = re.search(r"\bP[0-3]\b", cleaned)
+    match = re.search(r"\bP[0-4]\b", cleaned)
     return match.group(0) if match else cleaned
 
 
@@ -116,8 +116,8 @@ def _parse_active_row(cells: list[str], status: str, section: str) -> IRFItem | 
     # ID must look like IRF-XXX-NNN or DONE-NNN
     if not re.match(r"^(IRF-(?:[A-Z]+-)+\d+|DONE-\d+)$", item_id):
         return None
-    # Priority must be P0–P3 (active rows) or empty (completed rows)
-    if not re.match(r"^P[0-3]$", priority):
+    # Priority must be P0–P4 (active rows) or empty (completed rows)
+    if not re.match(r"^P[0-4]$", priority):
         return None
     row_status = status
     if "~~" in raw_item_id or "~~" in raw_priority or _strip_cell_markup(blocker).lower().startswith("completed"):
@@ -244,7 +244,7 @@ def irf_stats(items: list[IRFItem]) -> dict:
 
     completion_rate = round(completed / total, 4) if total else 0.0
 
-    by_priority: dict[str, int] = {"P0": 0, "P1": 0, "P2": 0, "P3": 0}
+    by_priority: dict[str, int] = {"P0": 0, "P1": 0, "P2": 0, "P3": 0, "P4": 0}
     by_domain: dict[str, int] = {}
 
     for item in items:

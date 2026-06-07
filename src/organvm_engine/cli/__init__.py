@@ -166,9 +166,8 @@ from organvm_engine.cli.indexer import (
     cmd_index_stats,
 )
 from organvm_engine.cli.irf import (
-    cmd_irf_list,
-    cmd_irf_stats,
-    cmd_irf_status,
+        cmd_irf_add,
+    cmd_irf_complete,
 )
 from organvm_engine.cli.ledger import (
     cmd_ledger_checkpoint,
@@ -2899,10 +2898,18 @@ def build_parser() -> argparse.ArgumentParser:
     irf_status = irf_sub.add_parser("status", help="Show all fields for a single IRF item")
     irf_status.add_argument("item_id", help="IRF item ID (e.g. IRF-SYS-001)")
 
-    irf_sub.add_parser(
-        "stats",
-        help="Show summary statistics for the IRF document",
-    ).add_argument("--json", action="store_true", help="Output JSON")
+    irf_add = irf_sub.add_parser("add", help="Add a new item to the IRF ledger")
+    irf_add.add_argument("item_id", help="The ID for the new item (e.g. IRF-SYS-999)")
+    irf_add.add_argument("--priority", required=True, help="Priority of the item (P0, P1, P2, P3, P4)")
+    irf_add.add_argument("--action", required=True, help="Action description")
+    irf_add.add_argument("--owner", required=True, help="Owner (e.g. Agent, Human, Agent+Human)")
+    irf_add.add_argument("--source", required=True, help="Source of the item (e.g. Session ID)")
+    irf_add.add_argument("--blocker", default="None", help="Blocker, if any (defaults to 'None')")
+    irf_add.add_argument("--section", default="Backlog", help="Target section header without ## (defaults to 'Backlog')")
+
+    irf_complete = irf_sub.add_parser("complete", help="Mark an active item as completed")
+    irf_complete.add_argument("item_id", help="The ID of the item to complete")
+    irf_complete.add_argument("--session", default=None, help="Session ID (defaults to CLAUDE_SESSION_ID)")
 
     # exit-interview — presidential handoff protocol (A9: Alchemical Inheritance)
     ei = sub.add_parser(
@@ -3604,7 +3611,10 @@ def main() -> int:
             "list": cmd_irf_list,
             "status": cmd_irf_status,
             "stats": cmd_irf_stats,
+            "add": cmd_irf_add,
+            "complete": cmd_irf_complete,
         }
+
         handler = irf_dispatch.get(getattr(args, "subcommand", "") or "")
         if handler:
             return handler(args)

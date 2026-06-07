@@ -135,3 +135,58 @@ def cmd_irf_stats(args) -> int:
         print(f"  {domain:<12} {count}")
 
     return 0
+
+def cmd_irf_add(args) -> int:
+    """Add a new IRF item to the ledger."""
+    from organvm_engine.irf.writer import add_irf_item
+    from organvm_engine.paths import irf_path
+
+    path = irf_path()
+    success = add_irf_item(
+        path=path,
+        item_id=args.item_id,
+        priority=args.priority,
+        action=args.action,
+        owner=args.owner,
+        source=args.source,
+        blocker=getattr(args, "blocker", "None"),
+        section=getattr(args, "section", "Backlog"),
+    )
+
+    if success:
+        print(f"Added {args.item_id} to IRF ledger in section '## {getattr(args, 'section', 'Backlog')}'.")
+        return 0
+    else:
+        print(f"Failed to add item: could not find section '## {getattr(args, 'section', 'Backlog')}'.", file=sys.stderr)
+        return 1
+
+
+def cmd_irf_complete(args) -> int:
+    """Move an active IRF item to the Completed section."""
+    import datetime
+    import os
+    from organvm_engine.irf.writer import complete_irf_item
+    from organvm_engine.paths import irf_path
+
+    path = irf_path()
+    
+    # We default session to the current CLAUDE_SESSION_ID or a placeholder
+    session = getattr(args, "session", None)
+    if not session:
+        session = os.environ.get("CLAUDE_SESSION_ID", "S-unknown")
+
+    date_str = datetime.date.today().isoformat()
+    
+    success = complete_irf_item(
+        path=path,
+        item_id=args.item_id,
+        session=session,
+        date=date_str,
+    )
+
+    if success:
+        print(f"Moved {args.item_id} to ## Completed section.")
+        return 0
+    else:
+        print(f"Failed to complete item: could not find active row for {args.item_id} or ## Completed section missing.", file=sys.stderr)
+        return 1

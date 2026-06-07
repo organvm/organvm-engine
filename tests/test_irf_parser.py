@@ -193,7 +193,7 @@ def test_stats_completion_rate():
 def test_stats_by_priority_keys():
     items = parse_irf(SAMPLE)
     stats = irf_stats(items)
-    assert set(stats["by_priority"].keys()) == {"P0", "P1", "P2", "P3"}
+    assert set(stats["by_priority"].keys()) == {"P0", "P1", "P2", "P3", "P4"}
 
 
 def test_stats_by_priority_values():
@@ -223,5 +223,5 @@ def test_stats_empty_list():
     assert stats["open"] == 0
     assert stats["completed"] == 0
     assert stats["completion_rate"] == 0.0
-    assert stats["by_priority"] == {"P0": 0, "P1": 0, "P2": 0, "P3": 0}
+    assert stats["by_priority"] == {"P0": 0, "P1": 0, "P2": 0, "P3": 0, "P4": 0}
     assert stats["by_domain"] == {}

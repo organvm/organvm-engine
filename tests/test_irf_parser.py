@@ -32,9 +32,9 @@ def test_parse_missing_file_returns_empty():
 
 
 def test_parse_correct_total_count():
-    # Sample has 8 active/blocked/archived items + 3 completed = 11 total
+    # Sample has 8 active/blocked/archived items + 4 completed = 12 total
     result = parse_irf(SAMPLE)
-    assert len(result) == 11
+    assert len(result) == 12
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +70,7 @@ def test_parse_p3_item_fields():
 def test_parse_completed_items_have_completed_status():
     items = parse_irf(SAMPLE)
     completed = [i for i in items if i.status == "completed"]
-    assert len(completed) == 3
+    assert len(completed) == 4
 
 
 def test_parse_completed_item_fields():
@@ -80,6 +80,15 @@ def test_parse_completed_item_fields():
     assert done001.priority == ""
     assert done001.domain == "DONE"
     assert "Application pipeline" in done001.action
+
+
+def test_parse_completed_subsection_five_column_row():
+    items = parse_irf(SAMPLE)
+    done004 = next(i for i in items if i.id == "DONE-004")
+    assert done004.status == "completed"
+    assert done004.domain == "DONE"
+    assert "Parser-visible closeout row" in done004.action
+    assert done004.source == "S-sample-closeout"
 
 
 def test_parse_completed_items_are_all_done():
@@ -147,7 +156,7 @@ def test_stats_required_keys():
 def test_stats_total():
     items = parse_irf(SAMPLE)
     stats = irf_stats(items)
-    assert stats["total"] == len(items) == 11
+    assert stats["total"] == len(items) == 12
 
 
 def test_stats_open():
@@ -159,7 +168,7 @@ def test_stats_open():
 def test_stats_completed():
     items = parse_irf(SAMPLE)
     stats = irf_stats(items)
-    assert stats["completed"] == 3
+    assert stats["completed"] == 4
 
 
 def test_stats_blocked():
@@ -177,7 +186,7 @@ def test_stats_archived():
 def test_stats_completion_rate():
     items = parse_irf(SAMPLE)
     stats = irf_stats(items)
-    expected = round(3 / 11, 4)
+    expected = round(4 / 12, 4)
     assert stats["completion_rate"] == pytest.approx(expected, abs=1e-4)
 
 

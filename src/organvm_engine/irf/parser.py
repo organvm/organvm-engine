@@ -1,12 +1,14 @@
 """IRF parser — parse INST-INDEX-RERUM-FACIENDARUM.md into typed items.
 
 The Index Rerum Faciendarum is a Markdown governance document with pipe-delimited
-tables. Active items use a 6-column format; completed items use a 4-column format.
+tables. Active items use a 6-column format; completed items use a 4- or 5-column format.
 Section headers (## ...) determine item status:
   - Under '## Completed'  → status = "completed"
   - Under '## Blocked'    → status = "blocked"
   - Under '## Archived'   → status = "archived"
   - Elsewhere             → status = "open"
+DONE-NNN ledger rows are treated as completed wherever they appear, because
+recent closeout ledgers live under the Statistics section.
 """
 
 from __future__ import annotations
@@ -39,7 +41,7 @@ class IRFItem:
 # ---------------------------------------------------------------------------
 
 # Matches a ## section header (## or ###, not ####)
-_SECTION_RE = re.compile(r"^#{2,3}\s+(.+)$")
+_SECTION_RE = re.compile(r"^(#{2,3})\s+(.+)$")
 
 # Matches a pipe-delimited table row with at least 4 non-separator cells.
 # We accept rows like:  | cell | cell | cell | cell |
@@ -53,6 +55,21 @@ _SEPARATOR_RE = re.compile(r"^[\|\-\:\s]+$")
 def _cells(raw_row: str) -> list[str]:
     """Split a raw markdown table row into stripped cell strings."""
     return [c.strip() for c in raw_row.strip("|").split("|")]
+
+
+def _strip_cell_markup(value: str) -> str:
+    """Strip lightweight Markdown wrappers from identifier-like cells."""
+    cleaned = value.strip()
+    for marker in ("**", "~~", "`"):
+        cleaned = cleaned.replace(marker, "")
+    return cleaned.strip()
+
+
+def _clean_priority(value: str) -> str:
+    """Return the first P0-P3 token from a priority cell, ignoring markup."""
+    cleaned = _strip_cell_markup(value)
+    match = re.search(r"\bP[0-3]\b", cleaned)
+    return match.group(0) if match else cleaned
 
 
 def _section_status(section: str) -> str:
@@ -91,15 +108,21 @@ def _parse_active_row(cells: list[str], status: str, section: str) -> IRFItem | 
     """
     if len(cells) < 6:
         return None
-    item_id, priority, action, owner, source, blocker = (
+    raw_item_id, raw_priority, action, owner, source, blocker = (
         cells[0], cells[1], cells[2], cells[3], cells[4], cells[5],
     )
+    item_id = _strip_cell_markup(raw_item_id)
+    priority = _clean_priority(raw_priority)
     # ID must look like IRF-XXX-NNN or DONE-NNN
-    if not re.match(r"^(IRF-[A-Z]+-\d+|DONE-\d+)$", item_id):
+    if not re.match(r"^(IRF-(?:[A-Z]+-)+\d+|DONE-\d+)$", item_id):
         return None
     # Priority must be P0–P3 (active rows) or empty (completed rows)
     if not re.match(r"^P[0-3]$", priority):
         return None
+    row_status = status
+    if "~~" in raw_item_id or "~~" in raw_priority or _strip_cell_markup(blocker).lower().startswith("completed"):
+        row_status = "completed"
+
     return IRFItem(
         id=item_id,
         priority=priority,
@@ -108,7 +131,7 @@ def _parse_active_row(cells: list[str], status: str, section: str) -> IRFItem | 
         owner=owner,
         source=source,
         blocker=blocker,
-        status=status,
+        status=row_status,
         section=section,
     )
 
@@ -120,8 +143,12 @@ def _parse_completed_row(cells: list[str], section: str) -> IRFItem | None:
     """
     if len(cells) < 4:
         return None
-    item_id, what, session = cells[0], cells[1], cells[2]
-    if not re.match(r"^(IRF-[A-Z]+-\d+|DONE-\d+)$", item_id):
+    item_id = _strip_cell_markup(cells[0])
+    if len(cells) >= 5 and re.match(r"^[A-Z]{2,5}$", _strip_cell_markup(cells[1])):
+        what, session = cells[2], cells[3]
+    else:
+        what, session = cells[1], cells[2]
+    if not re.match(r"^(IRF-(?:[A-Z]+-)+\d+|DONE-\d+)$", item_id):
         return None
     return IRFItem(
         id=item_id,
@@ -152,6 +179,7 @@ def parse_irf(path: Path) -> list[IRFItem]:
     items: list[IRFItem] = []
     current_section = "Preamble"
     current_status = "open"
+    parent_status = "open"
 
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.rstrip()
@@ -159,8 +187,16 @@ def parse_irf(path: Path) -> list[IRFItem]:
         # Detect ## or ### section headers
         section_match = _SECTION_RE.match(line)
         if section_match:
-            current_section = section_match.group(1).strip()
-            current_status = _section_status(current_section)
+            level = len(section_match.group(1))
+            current_section = section_match.group(2).strip()
+            section_status = _section_status(current_section)
+            if level == 2:
+                parent_status = section_status
+                current_status = section_status
+            elif section_status == "open" and parent_status in {"completed", "blocked", "archived"}:
+                current_status = parent_status
+            else:
+                current_status = section_status
             continue
 
         # Detect table rows
@@ -178,8 +214,10 @@ def parse_irf(path: Path) -> list[IRFItem]:
         if cells and cells[0].lower() == "id":
             continue
 
-        # Try to parse as active (6+ cols) or completed (4 cols) format
-        if current_status == "completed":
+        first_cell = _strip_cell_markup(cells[0]) if cells else ""
+
+        # Try to parse as active (6+ cols) or completed ledger format.
+        if current_status == "completed" or re.match(r"^DONE-\d+$", first_cell):
             item = _parse_completed_row(cells, current_section)
         else:
             item = _parse_active_row(cells, current_status, current_section)

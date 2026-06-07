@@ -56,6 +56,12 @@
 | DONE-002 | Testament Protocol — hash-linked event chain | S3, S5-7 | 2026-03-20 |
 | DONE-003 | Vigiles Aeternae — 22 regimes, 8 orders, full Python engine | S12 | 2026-03-20 |
 
+### S-sample-closeout — DONE-004 (2026-03-21)
+
+| ID | Domain | What | Session | Date |
+|----|--------|------|---------|------|
+| **DONE-004** | SYS | Parser-visible closeout row in current five-column format | S-sample-closeout | 2026-03-21 |
+
 ---
 
 ## Archived

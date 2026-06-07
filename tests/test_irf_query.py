@@ -88,7 +88,7 @@ def test_query_by_domain_crp():
 
 def test_query_by_domain_done():
     result = query_irf(_items(), domain="DONE")
-    assert len(result) == 3
+    assert len(result) == 4
     assert all(i.domain == "DONE" for i in result)
 
 
@@ -115,7 +115,7 @@ def test_query_by_status_open():
 
 def test_query_by_status_completed():
     result = query_irf(_items(), status="completed")
-    assert len(result) == 3
+    assert len(result) == 4
     assert all(i.status == "completed" for i in result)
 
 

@@ -466,16 +466,10 @@ def _build_plan_context(
         return ""
 
     # Plans in this repo
-    repo_plans = [
-        e for e in entries
-        if e.repo == repo_name and e.status == "active"
-    ]
+    repo_plans = [e for e in entries if e.repo == repo_name and e.status == "active"]
     # Related plans: same organ, different repo or different agent
     related = [
-        e for e in entries
-        if e.organ == organ_key
-        and e.repo != repo_name
-        and e.status == "active"
+        e for e in entries if e.organ == organ_key and e.repo != repo_name and e.status == "active"
     ]
 
     if not repo_plans and not related:
@@ -611,6 +605,7 @@ def _build_atoms_context(repo_name: str, organ_key: str) -> str:
 
     # Top tags from all pending tasks across all repos
     from collections import Counter
+
     tag_counter: Counter[str] = Counter()
     for repo_tasks in rollup.get("pending_by_repo", {}).values():
         for t in repo_tasks:
@@ -619,6 +614,7 @@ def _build_atoms_context(repo_name: str, organ_key: str) -> str:
 
     # Last run timestamp from manifest (if available)
     import json
+
     manifest_path = organ_dir / ".atoms" / "pipeline-manifest.json"
     last_run = "unknown"
     if manifest_path.exists():
@@ -839,7 +835,9 @@ def _build_ammoi_context() -> str:
 
     # Scale line: organs / repos / components
     if ammoi.total_components:
-        scale_line = f"8 organs / {ammoi.total_entities} repos / {ammoi.total_components} components"
+        scale_line = (
+            f"8 organs / {ammoi.total_entities} repos / {ammoi.total_components} components"
+        )
     else:
         scale_line = f"8 organs / {ammoi.total_entities} repos"
     if ammoi.hierarchy_depth > 2:
@@ -867,6 +865,7 @@ def _build_prompting_hint(agent: str | None) -> str:
         return ""
     try:
         from organvm_engine.prompting.loader import format_guidelines_hint, load_guidelines
+
         guidelines = load_guidelines(agent)
         if guidelines:
             return "\n" + format_guidelines_hint(guidelines) + "\n"
@@ -952,8 +951,7 @@ def _build_trivium_context(registry_organ_key: str) -> str:
         top_3 = ranked[:3]
 
         strongest = ", ".join(
-            f"{organ_for_dialect(p.target if p.source == dialect else p.source)}"
-            f" ({p.tier.value})"
+            f"{organ_for_dialect(p.target if p.source == dialect else p.source)} ({p.tier.value})"
             for p in top_3
         )
 
@@ -981,6 +979,7 @@ def _build_logos_context(repo_name: str, repo_data: dict) -> str:
     workspace = Path.home() / "Workspace"
 
     from organvm_engine.organ_config import get_organ_map
+
     organ_map = get_organ_map()
 
     # Try to find the repo on disk
@@ -998,14 +997,43 @@ def _build_logos_context(repo_name: str, repo_data: dict) -> str:
     logos_dir = repo_path / "docs" / "logos"
     logos_status = "ACTIVE" if logos_dir.exists() else "MISSING"
 
-    # Simple symmetry check
-    src_dir = repo_path / "src"
-    # Nature exists if there are code files in src/
+    # Simple symmetry check — scan all top-level directories for code files
+    code_extensions = ["*.py", "*.ts", "*.js", "*.go", "*.rs"]
     has_nature = False
-    if src_dir.exists():
-        for ext in ["*.py", "*.ts", "*.js", "*.go", "*.rs"]:
-            if any(src_dir.glob(f"**/{ext}")):
-                has_nature = True
+
+    # Check common code directories and the repo root
+    code_dirs = [
+        repo_path / d
+        for d in [
+            "src",
+            "lib",
+            "app",
+            "pkg",
+            "titan",
+            "tools",
+            "runtime",
+            "hive",
+            "gateway",
+            "dashboard",
+            "adapters",
+            "agents",
+            "cli",
+        ]
+    ]
+    code_dirs.append(repo_path)  # Also check repo root
+
+    for code_dir in code_dirs:
+        if code_dir.exists() and code_dir.is_dir():
+            for ext in code_extensions:
+                # Only check one level deep in each directory to avoid deep recursion
+                if any(code_dir.glob(f"{ext}")):
+                    has_nature = True
+                    break
+                # Also check one subdirectory level
+                if any(code_dir.glob(f"*{ext}")):
+                    has_nature = True
+                    break
+            if has_nature:
                 break
 
     # Counterpart exists if there are markdown files in docs/logos/
@@ -1023,7 +1051,11 @@ def _build_logos_context(repo_name: str, repo_data: dict) -> str:
     else:
         # Default for infrastructure/meta which might not have src/
         symmetry_score = "1.0 (SYMMETRIC)" if has_counterpart else "0.0 (VACUUM)"
-        logos_compliance_note = "Nature and Counterpart are in balance." if has_counterpart else "Formation is currently void."
+        logos_compliance_note = (
+            "Nature and Counterpart are in balance."
+            if has_counterpart
+            else "Formation is currently void."
+        )
 
     # Essay link (if flagship or explicitly mapped)
     essay_link = ""

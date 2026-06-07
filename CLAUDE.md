@@ -60,7 +60,7 @@ Every other module imports from these; change them carefully.
 | `ecosystem/` | Product business profiles, competitive matrix, gap analysis, action generation |
 | `prompting/` | Agent-specific prompting guidelines and provider standards |
 | `sop/` | SOP/METADOC discovery, inventory audit, tiered resolver (T4→T3→T2 cascade) |
-| `irf/` | Parse and query INST-INDEX-RERUM-FACIENDARUM.md — the universal work registry. IRFItem dataclass, priority/domain/status filtering |
+| `irf/` | Parse, query, AND write back INST-INDEX-RERUM-FACIENDARUM.md — the universal work registry. IRFItem dataclass, priority/domain/status filtering, parse-completeness diagnostics, and tooled mutations (`irf add` / `irf complete` / `irf stats --write`, dry-run by default, hardlink-inode-preserving) |
 | `fossil/` | Living Stratigraphy — archaeological reconstruction of system history. Excavates git commits, classifies by Jungian archetype (8 types), generates epoch chronicles, captures intentions, detects drift, real-time witness hooks, testament bridge |
 | `cli/` | One module per command group (24 modules), wired together in `cli/__init__.py` |
 

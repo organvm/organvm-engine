@@ -6,7 +6,8 @@ dashboard, MCP server, and auditor components.
 
 Public API::
 
-    from organvm_engine.irf import IRFItem, parse_irf, irf_stats, query_irf
+    from organvm_engine.irf import IRFItem, parse_irf, parse_irf_diagnostics, irf_stats, query_irf
+    from organvm_engine.irf.writer import add_item, complete_item, regenerate_stats_block
 
     items = parse_irf(Path("INST-INDEX-RERUM-FACIENDARUM.md"))
     stats = irf_stats(items)
@@ -14,12 +15,13 @@ Public API::
     sys_items = query_irf(items, domain="SYS")
 """
 
-from organvm_engine.irf.parser import IRFItem, irf_stats, parse_irf
+from organvm_engine.irf.parser import IRFItem, irf_stats, parse_irf, parse_irf_diagnostics
 from organvm_engine.irf.query import query_irf
 
 __all__ = [
     "IRFItem",
     "irf_stats",
     "parse_irf",
+    "parse_irf_diagnostics",
     "query_irf",
 ]

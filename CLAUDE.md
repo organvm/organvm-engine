@@ -11,6 +11,7 @@ Core Python package for the ORGANVM eight-organ system: registry, governance, se
 pip install -e ".[dev]"
 
 # Test
+export PYTHONPATH=src:../organvm-ontologia/src
 pytest tests/ -v                              # all tests
 pytest tests/test_registry.py -v              # one module
 pytest tests/test_registry.py::test_name -v   # one test
@@ -60,7 +61,7 @@ Every other module imports from these; change them carefully.
 | `ecosystem/` | Product business profiles, competitive matrix, gap analysis, action generation |
 | `prompting/` | Agent-specific prompting guidelines and provider standards |
 | `sop/` | SOP/METADOC discovery, inventory audit, tiered resolver (T4→T3→T2 cascade) |
-| `irf/` | Parse and query INST-INDEX-RERUM-FACIENDARUM.md — the universal work registry. IRFItem dataclass, priority/domain/status filtering |
+| `irf/` | Parse, query, and mutate INST-INDEX-RERUM-FACIENDARUM.md — the universal work registry. IRFItem dataclass, priority/domain/status filtering, safe write-back (add, complete, stats --write) |
 | `fossil/` | Living Stratigraphy — archaeological reconstruction of system history. Excavates git commits, classifies by Jungian archetype (8 types), generates epoch chronicles, captures intentions, detects drift, real-time witness hooks, testament bridge |
 | `cli/` | One module per command group (24 modules), wired together in `cli/__init__.py` |
 

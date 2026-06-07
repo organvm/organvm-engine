@@ -166,7 +166,10 @@ from organvm_engine.cli.indexer import (
     cmd_index_stats,
 )
 from organvm_engine.cli.irf import (
-        cmd_irf_add,
+    cmd_irf_list,
+    cmd_irf_stats,
+    cmd_irf_status,
+    cmd_irf_add,
     cmd_irf_complete,
 )
 from organvm_engine.cli.ledger import (
@@ -2897,6 +2900,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     irf_status = irf_sub.add_parser("status", help="Show all fields for a single IRF item")
     irf_status.add_argument("item_id", help="IRF item ID (e.g. IRF-SYS-001)")
+
+    irf_stats_p = irf_sub.add_parser(
+        "stats",
+        help="Show summary statistics for the IRF document",
+    )
+    irf_stats_p.add_argument("--json", action="store_true", help="Output JSON")
+    irf_stats_p.add_argument("--write", action="store_true", help="Regenerate ## Statistics section in IRF document")
 
     irf_add = irf_sub.add_parser("add", help="Add a new item to the IRF ledger")
     irf_add.add_argument("item_id", help="The ID for the new item (e.g. IRF-SYS-999)")

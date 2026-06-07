@@ -22,7 +22,7 @@ metadata:
     metrics, dispatch, git superproject management, context file sync,
     omega scorecard, CI triage, session analysis, plan atomization,
     prompt narrative extraction, atom linking, ecosystem profiling,
-    SOP resolver, IRF parser, event spine, testament protocol,
+    SOP resolver, IRF parser and write-back, event spine, testament protocol,
     ontologia integration, pulse system, trivium dialect translation,
     network testament, content syndication, debt tracking, and the
     unified 'organvm' CLI.
@@ -121,6 +121,9 @@ implements:
   - concept: generative_testament
     zettel_source: "post-flood/specs/generative-testament/grounding.md"
     aspect: "fossil/ — hash-linked archaeological record classified by Jungian archetype, testament bridge"
+  - concept: irf_write_back
+    zettel_source: "post-flood/specs/SPEC-026-irf-write-back/grounding.md"
+    aspect: "irf/writer.py — safe mutation of the universal work registry (add, complete, stats --write)"
   - concept: zettelkasten_protocol
     zettel_source: "post-flood/specs/SPEC-020-zettelkasten-protocol/grounding.md"
     aspect: "corpus/scanner.py — zettelkasten sidecar parsing + cross-trunk concept extraction"

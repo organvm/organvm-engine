@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from organvm_engine.irf.writer import add_irf_item, complete_irf_item
+from organvm_engine.irf.writer import add_irf_item, complete_irf_item, update_irf_stats
 
 
 @pytest.fixture
@@ -60,3 +60,22 @@ def test_add_to_missing_section(sample_irf: Path):
         section="MissingSection",
     )
     assert not success
+
+def test_update_irf_stats(sample_irf: Path):
+    stats = {
+        "total": 100,
+        "open": 50,
+        "completed": 40,
+        "blocked": 5,
+        "archived": 5,
+        "completion_rate": 0.4,
+        "by_priority": {"P0": 10, "P1": 20, "P2": 10, "P3": 10, "P4": 0},
+        "by_domain": {"SYS": 30, "APP": 20},
+    }
+    success = update_irf_stats(sample_irf, stats)
+    assert success
+    content = sample_irf.read_text(encoding="utf-8")
+    assert "## Statistics" in content
+    assert "| Total Items | 100 |" in content
+    assert "| P0 | 10 |" in content
+    assert "| SYS | 30 |" in content

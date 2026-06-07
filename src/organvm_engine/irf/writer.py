@@ -101,9 +101,6 @@ def complete_irf_item(path: Path, item_id: str, session: str, date: str) -> bool
                 item_action = cells[2]
                 break
             elif len(cells) >= 4:
-                # Might already be completed or a different format, but let's grab the action
-                # If it's already 4 columns, action is at idx 1 or 2 depending on if it has a priority column empty
-                # In active it's idx 2
                 item_row_idx = i
                 item_action = cells[2] if len(cells) >= 6 else cells[1]
                 break
@@ -146,13 +143,77 @@ def complete_irf_item(path: Path, item_id: str, session: str, date: str) -> bool
     if last_row_idx != -1:
         insert_idx = last_row_idx + 1
 
-    # Bold the item ID and the action text if it's not already?
-    # In the corpus, we saw:
-    # | IRF-SYS-182 | **`organvm irf list` / `irf status` / `irf stats` parser blind spot...** | S-2026-06-07... | 2026-06-07 |
-    # But some don't bold the action. We'll leave action as is (maybe the user bolds it, or we just copy it).
-    
     new_row = f"| {item_id} | {item_action} | {session} | {date} |"
     lines.insert(insert_idx, new_row)
 
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return True
+
+
+def update_irf_stats(path: Path, stats: dict) -> bool:
+    """Regenerates the ## Statistics section in the IRF file."""
+    if not path.exists():
+        return False
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start_idx = -1
+    end_idx = -1
+
+    for i, line in enumerate(lines):
+        if line.strip().startswith("## Statistics"):
+            start_idx = i
+            continue
+        if start_idx != -1 and line.strip().startswith("## "):
+            end_idx = i
+            break
+
+    if start_idx == -1:
+        # If no statistics section, append to end
+        start_idx = len(lines)
+        end_idx = len(lines)
+        lines.append("\n## Statistics")
+        start_idx = len(lines) - 1
+
+    if end_idx == -1:
+        end_idx = len(lines)
+
+    new_stats_block = [
+        "## Statistics",
+        "",
+        f"**Last updated:** {Path(path).stat().st_mtime}",  # Placeholder, will use current time
+        "",
+        "| Metric | Value |",
+        "|--------|-------|",
+        f"| Total Items | {stats['total']} |",
+        f"| Open Items | {stats['open']} |",
+        f"| Completed Items | {stats['completed']} |",
+        f"| Blocked Items | {stats['blocked']} |",
+        f"| Archived Items | {stats['archived']} |",
+        f"| Completion Rate | {stats['completion_rate'] * 100:.1f}% |",
+        "",
+        "### Items by Priority",
+        "",
+        "| Priority | Count |",
+        "|----------|-------|",
+    ]
+    
+    import datetime
+    new_stats_block[2] = f"**Last updated:** {datetime.date.today().isoformat()}"
+
+    for pri, count in sorted(stats["by_priority"].items()):
+        new_stats_block.append(f"| {pri} | {count} |")
+
+    new_stats_block.append("")
+    new_stats_block.append("### Items by Domain")
+    new_stats_block.append("")
+    new_stats_block.append("| Domain | Count |")
+    new_stats_block.append("|--------|-------|")
+
+    for domain, count in sorted(stats["by_domain"].items(), key=lambda x: -x[1]):
+        new_stats_block.append(f"| {domain} | {count} |")
+
+    new_stats_block.append("")
+
+    lines[start_idx:end_idx] = new_stats_block
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return True

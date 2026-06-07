@@ -99,7 +99,10 @@ def cmd_irf_status(args) -> int:
 
 
 def cmd_irf_stats(args) -> int:
-    """Show summary statistics for the IRF document."""
+    """Show summary statistics for the IRF document.
+
+    If --write is passed, regenerates the ## Statistics section in the IRF file.
+    """
     from organvm_engine.irf import irf_stats, parse_irf
     from organvm_engine.paths import irf_path
 
@@ -111,6 +114,16 @@ def cmd_irf_stats(args) -> int:
         json.dump(stats, sys.stdout, indent=2)
         sys.stdout.write("\n")
         return 0
+
+    if getattr(args, "write", False):
+        from organvm_engine.irf.writer import update_irf_stats
+        success = update_irf_stats(path, stats)
+        if success:
+            print(f"Regenerated ## Statistics in {path}")
+        else:
+            print(f"Failed to regenerate ## Statistics in {path}", file=sys.stderr)
+            return 1
+
 
     rate_pct = f"{stats['completion_rate'] * 100:.1f}%"
     print("IRF Summary")

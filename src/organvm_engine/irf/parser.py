@@ -114,7 +114,7 @@ def _parse_active_row(cells: list[str], status: str, section: str) -> IRFItem | 
     item_id = _strip_cell_markup(raw_item_id)
     priority = _clean_priority(raw_priority)
     # ID must look like IRF-XXX-NNN or DONE-NNN
-    if not re.match(r"^(IRF-(?:[A-Z]+-)+\d+|DONE-\d+)$", item_id):
+    if not re.match(r"^(IRF-[A-Z0-9\-]+|DONE-[A-Z0-9\-]+)$", item_id):
         return None
     # Priority must be P0–P4 (active rows) or empty (completed rows)
     if not re.match(r"^P[0-4]$", priority):
@@ -148,7 +148,7 @@ def _parse_completed_row(cells: list[str], section: str) -> IRFItem | None:
         what, session = cells[2], cells[3]
     else:
         what, session = cells[1], cells[2]
-    if not re.match(r"^(IRF-(?:[A-Z]+-)+\d+|DONE-\d+)$", item_id):
+    if not re.match(r"^(IRF-[A-Z0-9\-]+|DONE-[A-Z0-9\-]+)$", item_id):
         return None
     return IRFItem(
         id=item_id,

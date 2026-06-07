@@ -48,10 +48,49 @@ class TestPaths:
             Path("/tmp/other-root"),
         ]
 
+    def test_corpus_dir_skips_husk_and_probes_code_root(self, tmp_path, monkeypatch):
+        # Legacy location exists but holds no registry (relocation husk);
+        # the Code-root candidate holds the canonical registry and wins.
+        monkeypatch.delenv("ORGANVM_WORKSPACE_DIR", raising=False)
+        husk = tmp_path / "ws" / "meta-organvm" / "organvm-corpvs-testamentvm"
+        husk.mkdir(parents=True)
+        (husk / "CLAUDE.md").write_text("husk")
+        code_root = tmp_path / "code-organvm"
+        corpus = code_root / "organvm-corpvs-testamentvm"
+        corpus.mkdir(parents=True)
+        (corpus / "repo-registry.json").write_text("{}")
+        monkeypatch.setattr(paths, "_DEFAULT_WORKSPACE", tmp_path / "ws")
+        monkeypatch.setattr(paths, "_DEFAULT_CODE_ROOT", code_root)
+        assert paths.corpus_dir() == corpus
+
+    def test_corpus_dir_prefers_legacy_when_it_holds_registry(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("ORGANVM_WORKSPACE_DIR", raising=False)
+        legacy = tmp_path / "ws" / "meta-organvm" / "organvm-corpvs-testamentvm"
+        legacy.mkdir(parents=True)
+        (legacy / "registry-v2.json").write_text("{}")
+        code_root = tmp_path / "code-organvm"
+        other = code_root / "organvm-corpvs-testamentvm"
+        other.mkdir(parents=True)
+        (other / "repo-registry.json").write_text("{}")
+        monkeypatch.setattr(paths, "_DEFAULT_WORKSPACE", tmp_path / "ws")
+        monkeypatch.setattr(paths, "_DEFAULT_CODE_ROOT", code_root)
+        assert paths.corpus_dir() == legacy
+
     def test_registry_path(self):
         result = paths.registry_path()
         assert result.name == "registry-v2.json"
         assert "organvm-corpvs-testamentvm" in str(result)
+
+    def test_registry_path_prefers_canonical_name(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("ORGANVM_CORPUS_DIR", str(tmp_path))
+        (tmp_path / "repo-registry.json").write_text("{}")
+        (tmp_path / "registry-v2.json").write_text("{}")
+        assert paths.registry_path().name == "repo-registry.json"
+
+    def test_registry_path_breadcrumb_fallback(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("ORGANVM_CORPUS_DIR", str(tmp_path))
+        (tmp_path / "registry-v2.json").write_text("{}")
+        assert paths.registry_path().name == "registry-v2.json"
 
     def test_governance_rules_path(self):
         result = paths.governance_rules_path()

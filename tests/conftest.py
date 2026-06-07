@@ -25,6 +25,9 @@ def _block_production_paths(monkeypatch):
     import organvm_engine.registry.loader as loader_mod
 
     monkeypatch.setattr(paths_mod, "_DEFAULT_WORKSPACE", _BLOCKED)
+    # corpus_dir() also probes the Code-root fallback; block it so the
+    # content-based probe can never resolve the real corpus during tests.
+    monkeypatch.setattr(paths_mod, "_DEFAULT_CODE_ROOT", _BLOCKED)
     monkeypatch.setattr(
         loader_mod, "_default_registry_path", lambda: _BLOCKED / "registry-v2.json",
     )

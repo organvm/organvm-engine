@@ -5,7 +5,10 @@ variables when available, falls back to conventional defaults.
 
 Environment variables:
     ORGANVM_WORKSPACE_DIR — workspace root (default: ~/Workspace)
-    ORGANVM_CORPUS_DIR — corpus repo (default: <workspace>/meta-organvm/organvm-corpvs-testamentvm)
+    ORGANVM_CORPUS_DIR — corpus repo (default: probe of
+        <workspace>/meta-organvm/organvm-corpvs-testamentvm then
+        ~/Code/organvm/organvm-corpvs-testamentvm; a candidate qualifies
+        only if it contains the repo registry)
     ORGANVM_ADDITIONAL_WORKSPACE_ROOTS — colon-separated flat workspace roots
 """
 
@@ -18,6 +21,15 @@ from pathlib import Path
 
 _DEFAULT_WORKSPACE = Path.home() / "Workspace"
 _DEFAULT_CORPUS_SUBPATH = "meta-organvm/organvm-corpvs-testamentvm"
+# Corpus relocated to the Code root (2026-06 consolidation). Bare launchd
+# daemons do not inherit shell-profile env vars, so corpus_dir() must be able
+# to find the real corpus without ORGANVM_CORPUS_DIR. A directory only counts
+# as the corpus if it actually holds the repo registry — the legacy
+# <workspace> location can persist as a husk of auto-generated context files.
+_DEFAULT_CODE_ROOT = Path.home() / "Code" / "organvm"
+_CORPUS_REPO_NAME = "organvm-corpvs-testamentvm"
+# Canonical registry filename first; registry-v2.json is the retained breadcrumb.
+_REGISTRY_FILENAMES = ("repo-registry.json", "registry-v2.json")
 
 
 @dataclass(frozen=True)
@@ -44,7 +56,11 @@ class PathConfig:
         env = os.environ.get("ORGANVM_CORPUS_DIR")
         if env:
             return _coerce_path(env)
-        return self.workspace_root() / _DEFAULT_CORPUS_SUBPATH
+        legacy = self.workspace_root() / _DEFAULT_CORPUS_SUBPATH
+        for candidate in (legacy, _DEFAULT_CODE_ROOT / _CORPUS_REPO_NAME):
+            if _holds_registry(candidate):
+                return candidate
+        return legacy
 
     def additional_roots(self) -> list[Path]:
         raw = self.additional_workspace_roots
@@ -53,7 +69,14 @@ class PathConfig:
         return additional_workspace_roots(workspace=self.workspace_root())
 
     def registry_path(self) -> Path:
-        return self.corpus_dir() / "registry-v2.json"
+        corpus = self.corpus_dir()
+        for name in _REGISTRY_FILENAMES:
+            candidate = corpus / name
+            if candidate.is_file():
+                return candidate
+        # Nothing on disk (e.g. test sandbox): keep the legacy name so
+        # callers and fixtures see the historical default.
+        return corpus / _REGISTRY_FILENAMES[-1]
 
     def governance_rules_path(self) -> Path:
         return self.corpus_dir() / "governance-rules.json"
@@ -79,6 +102,15 @@ class PathConfig:
 
 def _coerce_path(value: Path | str) -> Path:
     return Path(value).expanduser()
+
+
+def _holds_registry(path: Path) -> bool:
+    """True if *path* contains the repo registry (canonical or breadcrumb name).
+
+    Content-based validation: directory existence alone is not enough,
+    because relocated repos can leave husk directories behind.
+    """
+    return any((path / name).is_file() for name in _REGISTRY_FILENAMES)
 
 
 def _split_path_list(value: str) -> list[Path]:

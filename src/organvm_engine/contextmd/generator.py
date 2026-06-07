@@ -1030,7 +1030,7 @@ def _build_logos_context(repo_name: str, repo_data: dict) -> str:
                     has_nature = True
                     break
                 # Also check one subdirectory level
-                if any(code_dir.glob(f"*{ext}")):
+                if any(code_dir.glob(f"*/{ext}")):
                     has_nature = True
                     break
             if has_nature:

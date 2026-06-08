@@ -443,7 +443,7 @@ def compute_ammoi(
     event_freq = _count_recent_events() if include_events else 0
 
     # Temporal deltas from history
-    history = _read_history(limit=200)
+    history = _read_history(limit=3000)
     d24h, d7d, d30d = _compute_temporal_deltas(system_density, history)
 
     # Pulse count from history

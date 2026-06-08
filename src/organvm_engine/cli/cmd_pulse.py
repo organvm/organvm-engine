@@ -751,16 +751,16 @@ def cmd_pulse_ammoi(args: Namespace) -> int:
     print(f"  Edges:     {ammoi.active_edges}")
     print(f"  Events:    {ammoi.event_frequency_24h} (24h)")
 
-    if ammoi.density_delta_24h or ammoi.density_delta_7d:
+    if ammoi.density_delta_24h is not None or ammoi.density_delta_7d is not None:
         print()
         print("  Temporal:")
-        if ammoi.density_delta_24h:
+        if ammoi.density_delta_24h is not None:
             s = "+" if ammoi.density_delta_24h > 0 else ""
             print(f"     Δ24h: {s}{ammoi.density_delta_24h:.1%}")
-        if ammoi.density_delta_7d:
+        if ammoi.density_delta_7d is not None:
             s = "+" if ammoi.density_delta_7d > 0 else ""
             print(f"     Δ7d:  {s}{ammoi.density_delta_7d:.1%}")
-        if ammoi.density_delta_30d:
+        if getattr(ammoi, 'density_delta_30d', None) is not None:
             s = "+" if ammoi.density_delta_30d > 0 else ""
             print(f"     Δ30d: {s}{ammoi.density_delta_30d:.1%}")
 

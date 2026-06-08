@@ -820,8 +820,8 @@ def _build_ammoi_context() -> str:
 
     d24h = ammoi.density_delta_24h
     d7d = ammoi.density_delta_7d
-    d24h_str = f"{'+' if d24h > 0 else ''}{d24h:.1%}" if d24h is not None else "n/a"
-    d7d_str = f"{'+' if d7d > 0 else ''}{d7d:.1%}" if d7d is not None else "n/a"
+    d24h_str = f"{'+' if d24h > 0 else ''}{d24h:.1%}" if d24h is not None else "vacuum"
+    d7d_str = f"{'+' if d7d > 0 else ''}{d7d:.1%}" if d7d is not None else "vacuum"
     ts = ammoi.timestamp[:19] if len(ammoi.timestamp) >= 19 else ammoi.timestamp
 
     # Advisory count (best-effort)

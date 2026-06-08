@@ -144,7 +144,7 @@ All pipeline outputs go to `corpus_dir/data/atoms/` with a `pipeline-manifest.js
 ### Governance
 - *Standard ORGANVM governance applies*
 
-*Last synced: 2026-05-23T00:26:31Z*
+*Last synced: 2026-06-08T16:26:25Z*
 
 ## Active Handoff Protocol
 
@@ -171,7 +171,7 @@ Transcripts are on-demand (never committed):
 
 ## System Library
 
-Plans: 269 indexed | Chains: 5 available | SOPs: 8 active
+Plans: 269 indexed | Chains: 5 available | SOPs: 18 active
 Discover: `organvm plans search <query>` | `organvm chains list` | `organvm sop lifecycle`
 Library: `/Users/4jp/Code/organvm/praxis-perpetua/library`
 
@@ -186,6 +186,8 @@ Library: `/Users/4jp/Code/organvm/praxis-perpetua/library`
 | system | any | multi-agent-dispatch | Multi-Agent Dispatch |
 | system | any | session-handoff-avalanche | Session Handoff Avalanche |
 | system | any | system-loops | System Loops |
+| system | any | prompting-standards | Prompting Standards |
+| system | any | prompting-standards | Prompting Standards |
 | system | any | prompting-standards | Prompting Standards |
 | system | any | background-task-resilience | background-task-resilience |
 | system | any | context-window-conservation | context-window-conservation |
@@ -203,8 +205,9 @@ Linked skills: SOP-TRIADIC-REVIEW-PROTOCOL, cicd-resilience-and-recovery, contin
 
 ## Task Queue (from pipeline)
 
-**222** pending tasks | Last pipeline: unknown
+**249** pending tasks | Last pipeline: unknown
 
+- `d50cf45b4bb3` Cross-Surface Prompt-Archaeology Sweep — hanging work from the past week's prompts (ALL agent surfaces) [aws, bash]
 - `e5543c56458b` /Users/4jp/Code/organvm/organvm-engine/src/organvm_engine/cli/session.py — Add `cmd_session_digest(args)` function after [chezmoi, pytest, rollup]
 - `439d2089820b` /Users/4jp/Code/organvm/organvm-engine/src/organvm_engine/cli/__init__.py — Register subparser (~line 1500): `sess_sub.a [chezmoi, pytest, rollup]
 - `2d23ae5722a3` /Users/4jp/Code/organvm/organvm-engine/tests/test_session_digest.py — New test file. Fixtures: synthetic day with one su [chezmoi, pytest, rollup]
@@ -212,19 +215,18 @@ Linked skills: SOP-TRIADIC-REVIEW-PROTOCOL, cicd-resilience-and-recovery, contin
 - `447a3e18398d` organvm-engine/src/organvm_engine/contextmd/sync.py — Add error-line cleanup regex [bash, pytest, python]
 - `4b7711e57972` concept — Named theoretical construct (AMMOI, SVSE, Formation Protocol, etc.) [node, pytest]
 - `424e33f0a45e` spec — Formal specification (SPEC-000 through SPEC-023, named specs) [node, pytest]
-- `73273b8df7b8` transcript — Raw Q&A conversation (Layer 1) [node, pytest]
-- ... and 214 more
+- ... and 241 more
 
-Cross-organ links: 168 | Top tags: `mcp`, `python`, `rollup`, `chezmoi`, `bash`
+Cross-organ links: 1343 | Top tags: `python`, `chezmoi`, `mcp`, `bash`, `pytest`
 
 Run: `organvm atoms pipeline --write && organvm atoms fanout --write`
 
 
 ## System Density (auto-generated)
 
-AMMOI: 25% | Edges: 0 | Tensions: 0 | Clusters: 0 | Adv: 27 | Events(24h): 37975
-Structure: 8 organs / 148 repos / 1654 components (depth 17) | Inference: 0% | Organs: META-ORGANVM:63%, ORGAN-I:53%, ORGAN-II:48%, ORGAN-III:54% +5 more
-Last pulse: 2026-05-23T00:26:28 | Δ24h: n/a | Δ7d: n/a
+AMMOI: 25% | Edges: 0 | Tensions: 0 | Clusters: 0 | Adv: 27 | Events(24h): 41370
+Structure: 8 organs / 149 repos / 1654 components (depth 17) | Inference: 0% | Organs: META-ORGANVM:63%, ORGAN-I:53%, ORGAN-II:48%, ORGAN-III:55% +5 more
+Last pulse: 2026-06-08T16:26:13 | Δ24h: 0.0% | Δ7d: vacuum
 
 
 ## Dialect Identity (Trivium)
@@ -238,7 +240,7 @@ Scan: `organvm trivium scan META <OTHER>` | Matrix: `organvm trivium matrix` | S
 
 ## Logos Documentation Layer
 
-**Status:** ACTIVE | **Symmetry:** 0.5 (DREAM)
+**Status:** ACTIVE | **Symmetry:** 1.0 (SYMMETRIC)
 
 Nature demands a documentation counterpart. This formation maintains its narrative record in `docs/logos/`.
 
@@ -253,6 +255,6 @@ Nature demands a documentation counterpart. This formation maintains its narrati
 
 - **[Public Essay](https://organvm-v-logos.github.io/public-process/)** — System-wide narrative entry.
 
-*Compliance: Record exists without implementation.*
+*Compliance: Nature and Counterpart are in balance.*
 
 <!-- ORGANVM:AUTO:END -->

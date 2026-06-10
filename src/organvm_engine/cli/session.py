@@ -523,6 +523,20 @@ def cmd_session_review(args: argparse.Namespace) -> int:
     except ImportError:
         pass  # content module not installed
 
+    # Check for uncommitted files (Nothing Local Only enforcement)
+    try:
+        from organvm_engine.git.status import check_uncommitted_files
+        uncommitted = check_uncommitted_files()
+        if uncommitted:
+            print("\nWARNING: Uncommitted files detected (Nothing Local Only covenant violation):")
+            for report in uncommitted:
+                print(f"  [{report['organ']}/{report['repo']}] {report['uncommitted_count']} files")
+                for f in report['files']:
+                    print(f"    {f}")
+            print()
+    except ImportError:
+        pass
+
     print(f"Export: organvm session export {short_id} --slug <your-slug>")
     print(f"Full transcript: organvm session transcript {short_id}")
     return 0

@@ -140,6 +140,8 @@ def parse_session(jsonl_path: Path) -> SessionMeta | None:
                 except json.JSONDecodeError:
                     continue
 
+                if not isinstance(msg, dict):
+                    continue
                 msg_type = msg.get("type", "")
 
                 # Extract session metadata from first user/assistant message
@@ -420,6 +422,8 @@ def render_prompts(jsonl_path: Path) -> str:
             except json.JSONDecodeError:
                 continue
 
+            if not isinstance(msg, dict):
+                continue
             msg_type = msg.get("type", "")
 
             if msg_type == "assistant":
@@ -556,6 +560,8 @@ def render_transcript(jsonl_path: Path) -> str:
             except json.JSONDecodeError:
                 continue
 
+            if not isinstance(msg, dict):
+                continue
             msg_type = msg.get("type", "")
 
             if msg_type == "user":
@@ -722,6 +728,8 @@ def render_transcript_unabridged(jsonl_path: Path) -> str:
             except json.JSONDecodeError:
                 continue
 
+            if not isinstance(entry, dict):
+                continue
             etype = entry.get("type", "")
             ts_str = entry.get("timestamp", "")
             ts_short = ts_str[11:19] if len(ts_str) >= 19 else ""
@@ -1150,6 +1158,8 @@ def parse_codex_session(jsonl_path: Path) -> SessionMeta | None:
                 except json.JSONDecodeError:
                     continue
 
+                if not isinstance(entry, dict):
+                    continue
                 ts_str = entry.get("timestamp")
                 if ts_str:
                     ts = _parse_iso_ts(ts_str)
@@ -1237,6 +1247,8 @@ def render_codex_transcript(jsonl_path: Path, unabridged: bool = False) -> str:
             except json.JSONDecodeError:
                 continue
 
+            if not isinstance(entry, dict):
+                continue
             etype = entry.get("type", "")
             ts_str = entry.get("timestamp", "")
             ts_short = ts_str[11:19] if len(ts_str) >= 19 else ""

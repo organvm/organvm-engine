@@ -54,7 +54,7 @@ def _read_cwd_from_project(proj_dir: Path) -> str:
     """
     for jsonl in proj_dir.glob("*.jsonl"):
         try:
-            with jsonl.open(encoding="utf-8") as f:
+            with jsonl.open(encoding="utf-8", errors="replace") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -130,7 +130,7 @@ def parse_session(jsonl_path: Path) -> SessionMeta | None:
     first_human = ""
 
     try:
-        with jsonl_path.open(encoding="utf-8") as f:
+        with jsonl_path.open(encoding="utf-8", errors="replace") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -410,7 +410,7 @@ def render_prompts(jsonl_path: Path) -> str:
     pending_actions: list[str] = []
     prompt_texts: list[str] = []  # for pattern summary
 
-    with jsonl_path.open(encoding="utf-8") as f:
+    with jsonl_path.open(encoding="utf-8", errors="replace") as f:
         for raw_line in f:
             raw_line = raw_line.strip()
             if not raw_line:
@@ -546,7 +546,7 @@ def render_transcript(jsonl_path: Path) -> str:
     lines.append("")
 
     turn = 0
-    with jsonl_path.open(encoding="utf-8") as f:
+    with jsonl_path.open(encoding="utf-8", errors="replace") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -712,7 +712,7 @@ def render_transcript_unabridged(jsonl_path: Path) -> str:
     lines.append("")
 
     msg_num = 0
-    with jsonl_path.open(encoding="utf-8") as f:
+    with jsonl_path.open(encoding="utf-8", errors="replace") as f:
         for raw_line in f:
             raw_line = raw_line.strip()
             if not raw_line:
@@ -838,7 +838,7 @@ def render_transcript_unabridged(jsonl_path: Path) -> str:
 def parse_gemini_session(json_path: Path) -> SessionMeta | None:
     """Parse a Gemini CLI session JSON into SessionMeta."""
     try:
-        with json_path.open(encoding="utf-8") as f:
+        with json_path.open(encoding="utf-8", errors="replace") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
         return None
@@ -897,7 +897,7 @@ def parse_gemini_session(json_path: Path) -> SessionMeta | None:
 def render_gemini_transcript(json_path: Path, unabridged: bool = False) -> str:
     """Render a Gemini session as readable markdown."""
     try:
-        with json_path.open(encoding="utf-8") as f:
+        with json_path.open(encoding="utf-8", errors="replace") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
         return ""
@@ -1042,7 +1042,7 @@ def render_gemini_prompts(json_path: Path) -> str:
         return ""
 
     try:
-        with json_path.open(encoding="utf-8") as f:
+        with json_path.open(encoding="utf-8", errors="replace") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
         return ""
@@ -1140,7 +1140,7 @@ def parse_codex_session(jsonl_path: Path) -> SessionMeta | None:
     first_human = ""
 
     try:
-        with jsonl_path.open(encoding="utf-8") as f:
+        with jsonl_path.open(encoding="utf-8", errors="replace") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -1227,7 +1227,7 @@ def render_codex_transcript(jsonl_path: Path, unabridged: bool = False) -> str:
     ]
 
     msg_num = 0
-    with jsonl_path.open(encoding="utf-8") as f:
+    with jsonl_path.open(encoding="utf-8", errors="replace") as f:
         for raw_line in f:
             raw_line = raw_line.strip()
             if not raw_line:
@@ -1453,7 +1453,7 @@ def extract_human_texts(jsonl_path: Path) -> list[str]:
     texts: list[str] = []
 
     try:
-        fh = jsonl_path.open(encoding="utf-8")
+        fh = jsonl_path.open(encoding="utf-8", errors="replace")
     except OSError:
         return texts
 

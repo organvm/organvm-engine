@@ -324,12 +324,32 @@ def sync_repo(
 ) -> dict[str, Any]:
     """Sync a single repo's context file."""
     agent = filename.replace(".md", "").lower() if filename else None
+    handoff_status_block = _build_handoff_status_block(repo_path)
     section = generate_repo_section(
-        repo_name, org, registry, seed, sop_entries=sop_entries, agent=agent,
+        repo_name,
+        org,
+        registry,
+        seed,
+        sop_entries=sop_entries,
+        agent=agent,
+        handoff_status_block=handoff_status_block,
     )
     file_path = repo_path / filename
     action = _inject_section(file_path, section, dry_run)
     return {"path": str(file_path), "action": action, "dry_run": dry_run}
+
+
+def _build_handoff_status_block(repo_path: Path) -> str:
+    handoff_path = repo_path / ".conductor" / "active-handoff.md"
+    if not handoff_path.is_file():
+        return ""
+    try:
+        from organvm_engine.handoff import read_handoff, render_context_handoff_warning
+
+        entry = read_handoff(handoff_path, root=repo_path.parent)
+        return render_context_handoff_warning(entry)
+    except Exception:
+        return ""
 
 
 def _inject_section(file_path: Path, new_section: str, dry_run: bool = False) -> str:

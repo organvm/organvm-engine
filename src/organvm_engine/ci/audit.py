@@ -15,6 +15,7 @@ merge_queues — reported as 'requires_api' and excluded from scoring.
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from enum import Enum
@@ -510,9 +511,15 @@ _TEST_PATTERNS = [
 _TYPECHECK_PATTERNS = [
     r"pyright",
     r"mypy",
-    r"tsc\s+--noEmit",
+    r"\b(?:npx\s+)?tsc\b(?![^\n]*--noCheck)(?=[^\n]*(?:--noEmit|\s-b\b|--build\b))",
     r"npm\s+run\s+typecheck",
+    r"pnpm\s+run\s+typecheck",
+    r"yarn\s+typecheck",
+    r"bun\s+run\s+typecheck",
     r"type-check",
+    r"vue-tsc",
+    r"svelte-check",
+    r"astro\s+check",
 ]
 
 _SECRET_SCAN_PATTERNS = [
@@ -524,6 +531,161 @@ _SECRET_SCAN_PATTERNS = [
     r"ghp_\[a-zA-Z",
     r"AKIA\[A-Z",
 ]
+
+_PACKAGE_JSON_EXCLUDED_DIRS = {
+    ".git",
+    ".next",
+    ".nuxt",
+    ".turbo",
+    "build",
+    "coverage",
+    "dist",
+    "node_modules",
+    "playwright-report",
+    "test-results",
+}
+
+_PACKAGE_SCRIPT_RE = re.compile(
+    r"\b(?:npm|pnpm|yarn|bun)(?:\s+--[\w-]+(?:[=\s]\S+)?)?\s+"
+    r"(?:run\s+)?(?P<script>[A-Za-z0-9:_-]+)\b",
+)
+_TURBO_RUN_RE = re.compile(r"\b(?:npx\s+)?turbo\s+run\s+(?P<tasks>[^\n;&|]+)")
+
+
+def _command_runs_typechecker(command: str) -> bool:
+    """Return True if a package script command performs static type checking."""
+    for segment in re.split(r"\s*(?:&&|\|\||;|\n)\s*", command):
+        if not segment:
+            continue
+        lowered = segment.lower()
+        if "pyright" in lowered or "mypy" in lowered:
+            return True
+        if "vue-tsc" in lowered or "svelte-check" in lowered:
+            return True
+        if re.search(r"\bastro\s+check\b", lowered):
+            return True
+        if (
+            re.search(r"\btsc\b", lowered)
+            and "--nocheck" not in lowered
+            and "--watch" not in lowered
+        ):
+            return True
+    return False
+
+
+def _package_json_candidates(repo_path: Path, *, include_nested: bool) -> list[Path]:
+    """Return package.json candidates, excluding generated dependency directories."""
+    if not include_nested:
+        return [repo_path / "package.json"]
+
+    candidates: list[Path] = []
+    for candidate in repo_path.rglob("package.json"):
+        try:
+            rel_parts = candidate.relative_to(repo_path).parts
+        except ValueError:
+            continue
+        if any(part in _PACKAGE_JSON_EXCLUDED_DIRS for part in rel_parts):
+            continue
+        candidates.append(candidate)
+    return sorted(candidates)
+
+
+def _iter_package_scripts(
+    repo_path: Path,
+    *,
+    include_nested: bool = False,
+) -> list[tuple[Path, dict[str, str]]]:
+    """Load package scripts from root or nested package.json files."""
+    packages: list[tuple[Path, dict[str, str]]] = []
+    for package_json in _package_json_candidates(repo_path, include_nested=include_nested):
+        if not package_json.is_file():
+            continue
+        try:
+            data = json.loads(package_json.read_text(errors="replace"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        scripts = data.get("scripts", {})
+        if isinstance(scripts, dict):
+            packages.append(
+                (
+                    package_json,
+                    {str(name): str(command) for name, command in scripts.items()},
+                ),
+            )
+    return packages
+
+
+def _workflow_contents(repo_path: Path) -> list[tuple[Path, str]]:
+    """Read workflow YAML files from a repository."""
+    wf_dir = repo_path / ".github" / "workflows"
+    if not wf_dir.is_dir():
+        return []
+
+    contents: list[tuple[Path, str]] = []
+    for wf in wf_dir.iterdir():
+        if not wf.is_file() or wf.suffix not in (".yml", ".yaml"):
+            continue
+        try:
+            contents.append((wf, wf.read_text(errors="replace")))
+        except OSError:
+            continue
+    return contents
+
+
+def _invoked_package_scripts(content: str) -> set[str]:
+    """Extract package script names invoked by workflow shell snippets."""
+    scripts: set[str] = set()
+    for match in _PACKAGE_SCRIPT_RE.finditer(content):
+        script = match.group("script")
+        if script not in {"ci", "install", "i"}:
+            scripts.add(script)
+    return scripts
+
+
+def _invoked_turbo_tasks(content: str) -> set[str]:
+    """Extract task names from `turbo run ...` workflow commands."""
+    tasks: set[str] = set()
+    for match in _TURBO_RUN_RE.finditer(content):
+        for token in match.group("tasks").split():
+            if token.startswith("-") or token.startswith("${{"):
+                continue
+            tasks.add(token)
+    return tasks
+
+
+def _check_type_checking(repo_path: Path) -> InfraCheck:
+    """Check for type checking in workflows, including package-script indirection."""
+    direct = _check_ci_content(repo_path, "type_checking", _TYPECHECK_PATTERNS)
+    if direct.status == CheckStatus.PASS:
+        return direct
+
+    root_packages = _iter_package_scripts(repo_path)
+    nested_packages = _iter_package_scripts(repo_path, include_nested=True)
+    workflows = _workflow_contents(repo_path)
+
+    for wf, content in workflows:
+        for script_name in _invoked_package_scripts(content):
+            for package_json, scripts in root_packages:
+                command = scripts.get(script_name)
+                if command and _command_runs_typechecker(command):
+                    return InfraCheck(
+                        "type_checking",
+                        CheckStatus.PASS,
+                        f"{script_name} script in {package_json.name} via {wf.name}",
+                    )
+
+        for task_name in _invoked_turbo_tasks(content):
+            for package_json, scripts in nested_packages:
+                command = scripts.get(task_name)
+                if command and _command_runs_typechecker(command):
+                    rel = package_json.relative_to(repo_path)
+                    return InfraCheck(
+                        "type_checking",
+                        CheckStatus.PASS,
+                        f"turbo {task_name} script in {rel} via {wf.name}",
+                    )
+
+    return direct
 
 
 # ---------------------------------------------------------------------------
@@ -602,9 +764,7 @@ def audit_repo(
     if docs_only:
         compliance.checks.append(InfraCheck("type_checking", CheckStatus.SKIP, "docs-only repo"))
     else:
-        compliance.checks.append(
-            _check_ci_content(repo_path, "type_checking", _TYPECHECK_PATTERNS),
-        )
+        compliance.checks.append(_check_type_checking(repo_path))
 
     # 7. CodeQL
     if docs_only:

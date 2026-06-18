@@ -697,6 +697,64 @@ class TestIndividualChecks:
         result = _check_ci_content(repo, "linting", [r"ruff\s+check"])
         assert result.status == CheckStatus.FAIL
 
+    def test_typecheck_detects_package_test_script(self, tmp_path: Path):
+        from organvm_engine.ci.audit import _check_type_checking
+
+        repo = tmp_path / "r"
+        wf = repo / ".github" / "workflows"
+        wf.mkdir(parents=True)
+        (repo / "package.json").write_text(
+            json.dumps({"scripts": {"test": "tsc --noEmit"}}),
+        )
+        (wf / "ci.yml").write_text(
+            "steps:\n"
+            "  - run: pnpm install\n"
+            "  - run: pnpm run test\n",
+        )
+        result = _check_type_checking(repo)
+        assert result.status == CheckStatus.PASS
+        assert "test script" in result.detail
+
+    def test_typecheck_detects_turbo_nested_script(self, tmp_path: Path):
+        from organvm_engine.ci.audit import _check_type_checking
+
+        repo = tmp_path / "r"
+        wf = repo / ".github" / "workflows"
+        pkg = repo / "packages" / "app"
+        wf.mkdir(parents=True)
+        pkg.mkdir(parents=True)
+        (repo / "package.json").write_text(
+            json.dumps({"scripts": {"lint": "turbo run lint"}}),
+        )
+        (pkg / "package.json").write_text(
+            json.dumps({"scripts": {"lint": "tsc --noEmit"}}),
+        )
+        (wf / "ci.yml").write_text(
+            "steps:\n"
+            "  - run: npm ci\n"
+            "  - run: npx turbo run test lint ${{ steps.changed.outputs.filter }}\n",
+        )
+        result = _check_type_checking(repo)
+        assert result.status == CheckStatus.PASS
+        assert "turbo lint script" in result.detail
+
+    def test_typecheck_rejects_no_check_build_script(self, tmp_path: Path):
+        from organvm_engine.ci.audit import _check_type_checking
+
+        repo = tmp_path / "r"
+        wf = repo / ".github" / "workflows"
+        wf.mkdir(parents=True)
+        (repo / "package.json").write_text(
+            json.dumps({"scripts": {"build": "tsc -b --noCheck && vite build"}}),
+        )
+        (wf / "ci.yml").write_text(
+            "steps:\n"
+            "  - run: npm ci\n"
+            "  - run: npm run build\n",
+        )
+        result = _check_type_checking(repo)
+        assert result.status == CheckStatus.FAIL
+
 
 # ---------------------------------------------------------------------------
 # Tier-aware requirements

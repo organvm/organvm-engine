@@ -100,6 +100,7 @@ def _resolve_repo_path(
     Strategy:
     1. Use organ directory mapping from organ_config
     2. Fall back to org name as directory
+    3. Fall back to a flat workspace clone at <workspace>/<repo>
     """
     # Map registry key to workspace directory
     organ_dir = key_to_dir.get(organ_key)
@@ -110,6 +111,12 @@ def _resolve_repo_path(
 
     # Fall back to org-name directory
     candidate = ws / org / repo_name
+    if candidate.is_dir():
+        return candidate
+
+    # Flat workspace layout, e.g. migrated a-organvm clones at
+    # <workspace>/<repo> rather than <workspace>/<org>/<repo>.
+    candidate = ws / repo_name
     if candidate.is_dir():
         return candidate
 

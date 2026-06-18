@@ -49,6 +49,7 @@ def generate_repo_section(
     plan_index: "PlanIndex | None" = None,
     sop_entries: list | None = None,
     agent: str | None = None,
+    handoff_status_block: str = "",
 ) -> str:
     """Generate the auto-generated section for a repo-level CLAUDE.md / GEMINI.md."""
 
@@ -110,6 +111,7 @@ def generate_repo_section(
         edges_block=edges_block,
         siblings_block=siblings_block,
         governance_block=governance_block,
+        handoff_status_block=handoff_status_block.rstrip(),
         timestamp=_timestamp(),
     )
 

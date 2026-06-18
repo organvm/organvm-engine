@@ -34,6 +34,9 @@ REPO_SECTION = """\
 If `.conductor/active-handoff.md` exists, **READ IT FIRST** before doing any work.
 It contains constraints, locked files, conventions, and completed work from the
 originating agent. You MUST honor all constraints listed there.
+Handoff files should include `created_at` and `expires_at` metadata in UTC
+ISO-8601 form so stale constraints can be detected automatically.
+{handoff_status_block}
 
 If the handoff says "CROSS-VERIFICATION REQUIRED", your self-assessment will
 NOT be trusted. A different agent will verify your output against these constraints.

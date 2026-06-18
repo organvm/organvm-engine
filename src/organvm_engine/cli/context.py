@@ -26,6 +26,7 @@ def cmd_context_sync(args: argparse.Namespace) -> int:
 
     # --write overrides the default dry_run=True
     dry_run = not getattr(args, "write", False)
+    show_diff = getattr(args, "diff", False)
 
     organs = [args.organ] if args.organ else None
     result = sync_all(
@@ -33,6 +34,7 @@ def cmd_context_sync(args: argparse.Namespace) -> int:
         registry_path=args.registry,
         dry_run=dry_run,
         organs=organs,
+        collect_changes=True,
     )
 
     print("System Context Sync Results")
@@ -45,7 +47,32 @@ def cmd_context_sync(args: argparse.Namespace) -> int:
         for e in result["errors"]:
             print(f"    - {e['path']}: {e['error']}")
 
+    # Diff/changelog of what this run changed relative to the previous run
+    changes = result.get("changes")
+    if changes:
+        from organvm_engine.contextmd.changelog import RunChangelog, render_changes
+
+        run = RunChangelog(dry_run=dry_run, changes=changes)
+        print()
+        print(render_changes(run, show_diff=show_diff))
+        if not show_diff and run.with_diffs():
+            print("  (re-run with --diff to see line-level changes)")
+
+    if result.get("changelog_path"):
+        print(f"\nChangelog updated: {result['changelog_path']}")
+
     if result.get("dry_run"):
         print("\n[DRY RUN] No files were modified.")
 
     return 1 if result["errors"] else 0
+
+
+def cmd_context_changelog(args: argparse.Namespace) -> int:
+    from organvm_engine.contextmd.changelog import load_changelog, render_changelog
+
+    entries = load_changelog()
+    if getattr(args, "json", False):
+        print(json.dumps(entries, indent=2))
+    else:
+        print(render_changelog(entries, limit=getattr(args, "limit", None)))
+    return 0

@@ -30,8 +30,15 @@ def sync_all(
     dry_run: bool = False,
     organs: list[str] | None = None,
     additional_workspace_roots: list[Path] | None = None,
+    collect_changes: bool = False,
 ) -> dict[str, Any]:
-    """Sync auto-generated sections across all context files."""
+    """Sync auto-generated sections across all context files.
+
+    When *collect_changes* is True, the returned dict gains a ``changes`` key
+    holding per-file :class:`~organvm_engine.contextmd.changelog.SyncChange`
+    records (each with a unified diff of the AUTO block) describing what this
+    run changed relative to the on-disk state from the previous run.
+    """
     from organvm_engine.git.superproject import REGISTRY_KEY_MAP
     from organvm_engine.paths import additional_workspace_roots as resolve_additional_roots
     from organvm_engine.paths import workspace_root
@@ -87,6 +94,7 @@ def sync_all(
     created = []
     skipped = []
     errors = []
+    changes: list | None = [] if collect_changes else None
 
     target_organs = organs or list(REGISTRY_KEY_MAP.keys())
 
@@ -103,7 +111,9 @@ def sync_all(
             for filename in ["CLAUDE.md", "GEMINI.md", "AGENTS.md"]:
                 try:
                     organ_section = generate_organ_section(organ_key, reg, all_seeds)
-                    action = _inject_section(organ_path / filename, organ_section, dry_run)
+                    action = _inject_section(
+                        organ_path / filename, organ_section, dry_run, changes=changes,
+                    )
                     if action == "created":
                         created.append(str(organ_path / filename))
                     elif action == "updated":
@@ -133,6 +143,7 @@ def sync_all(
                     errors=errors,
                     promotion_to_phase=promotion_to_phase,
                     resolve_all_sops=resolve_all_sops,
+                    changes=changes,
                 )
 
         # 3b. Sync repo-level context files for additive flat workspace roots.
@@ -160,13 +171,14 @@ def sync_all(
                     errors=errors,
                     promotion_to_phase=promotion_to_phase,
                     resolve_all_sops=resolve_all_sops,
+                    changes=changes,
                 )
 
     # 4. Sync workspace-level context files
     for filename in ["CLAUDE.md", "GEMINI.md", "AGENTS.md"]:
         try:
             ws_section = generate_workspace_section(reg, all_seeds)
-            action = _inject_section(ws / filename, ws_section, dry_run)
+            action = _inject_section(ws / filename, ws_section, dry_run, changes=changes)
             if action == "created":
                 created.append(str(ws / filename))
             elif action == "updated":
@@ -183,6 +195,8 @@ def sync_all(
         "errors": errors,
         "dry_run": dry_run,
     }
+    if changes is not None:
+        result["changes"] = changes
 
     # Emit context sync event
     if not dry_run:
@@ -215,6 +229,27 @@ def sync_all(
                 "errors": len(errors),
             },
         )
+
+        # Persist the diff/changelog entry for this run
+        if changes:
+            from datetime import datetime, timezone
+
+            from organvm_engine.contextmd.changelog import (
+                RunChangelog,
+                append_changelog,
+            )
+
+            run = RunChangelog(
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                dry_run=dry_run,
+                changes=list(changes),
+            )
+            try:
+                written = append_changelog(run)
+                if written is not None:
+                    result["changelog_path"] = str(written)
+            except Exception:
+                pass
 
     return result
 
@@ -264,6 +299,7 @@ def _sync_repo_context_files(
     errors: list[dict[str, str]],
     promotion_to_phase,
     resolve_all_sops,
+    changes: list | None = None,
 ) -> None:
     repo_name = repo_entry.get("name")
     if not repo_name:
@@ -287,6 +323,7 @@ def _sync_repo_context_files(
                 dry_run,
                 filename=filename,
                 sop_entries=repo_sops,
+                changes=changes,
             )
             if res["action"] == "created":
                 created.append(res["path"])
@@ -301,7 +338,9 @@ def _sync_repo_context_files(
         agents_section = generate_agents_section(
             repo_name, org_name, registry, repo_to_seed.get(repo_name),
         )
-        action = _inject_section(repo_path / "AGENTS.md", agents_section, dry_run)
+        action = _inject_section(
+            repo_path / "AGENTS.md", agents_section, dry_run, changes=changes,
+        )
         if action == "created":
             created.append(str(repo_path / "AGENTS.md"))
         elif action == "updated":
@@ -321,6 +360,7 @@ def sync_repo(
     dry_run: bool = False,
     filename: str = "CLAUDE.md",
     sop_entries: list | None = None,
+    changes: list | None = None,
 ) -> dict[str, Any]:
     """Sync a single repo's context file."""
     agent = filename.replace(".md", "").lower() if filename else None
@@ -328,17 +368,34 @@ def sync_repo(
         repo_name, org, registry, seed, sop_entries=sop_entries, agent=agent,
     )
     file_path = repo_path / filename
-    action = _inject_section(file_path, section, dry_run)
+    action = _inject_section(file_path, section, dry_run, changes=changes)
     return {"path": str(file_path), "action": action, "dry_run": dry_run}
 
 
-def _inject_section(file_path: Path, new_section: str, dry_run: bool = False) -> str:
-    """Inject or replace the auto-generated section in a markdown file."""
+def _inject_section(
+    file_path: Path,
+    new_section: str,
+    dry_run: bool = False,
+    changes: list | None = None,
+) -> str:
+    """Inject or replace the auto-generated section in a markdown file.
+
+    When *changes* is provided, a :class:`~organvm_engine.contextmd.changelog.SyncChange`
+    describing the edit (with a unified diff of the AUTO block) is appended to it.
+    """
     import re
+
+    def _record(old_content: str | None, action: str) -> str:
+        if changes is not None:
+            from organvm_engine.contextmd.changelog import compute_change
+
+            changes.append(compute_change(file_path, old_content, new_section, action))
+        return action
+
     if not file_path.exists():
         if not dry_run:
             file_path.write_text(new_section + "\n")
-        return "created"
+        return _record(None, "created")
 
     content = file_path.read_text()
 
@@ -363,12 +420,12 @@ def _inject_section(file_path: Path, new_section: str, dry_run: bool = False) ->
         pattern = re.escape(AUTO_START) + r".*" + re.escape(AUTO_END)
         new_content = re.sub(pattern, new_section, content, flags=re.DOTALL)
         if new_content == content:
-            return "unchanged"
+            return _record(content, "unchanged")
         if not dry_run:
             file_path.write_text(new_content)
-        return "updated"
+        return _record(content, "updated")
     # Append to end
     new_content = content.rstrip() + "\n\n" + new_section + "\n"
     if not dry_run:
         file_path.write_text(new_content)
-    return "updated"
+    return _record(content, "updated")

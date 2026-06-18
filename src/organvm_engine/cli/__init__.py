@@ -32,7 +32,8 @@ Usage:
     organvm omega check
     organvm pitch generate <repo> [--dry-run]
     organvm pitch sync [--organ X] [--dry-run] [--tier X]
-    organvm context sync [--dry-run] [--organ X]
+    organvm context sync [--dry-run] [--organ X] [--diff]
+    organvm context changelog [--limit N] [--json]
     organvm context surfaces [--workspace <path>] [--repo <name>] [--json]
     organvm prompts narrate [--agent claude|gemini|codex] [--project FILTER] [--output FILE] [--summary FILE] [--dry-run] [--gap-hours 24]
     organvm plans atomize [--plans-dir DIR] [--output FILE] [--summary FILE] [--dry-run]
@@ -95,7 +96,11 @@ from organvm_engine.cli.content import (
     cmd_content_new,
     cmd_content_status,
 )
-from organvm_engine.cli.context import cmd_context_surfaces, cmd_context_sync
+from organvm_engine.cli.context import (
+    cmd_context_changelog,
+    cmd_context_surfaces,
+    cmd_context_sync,
+)
 from organvm_engine.cli.corpus import (
     cmd_corpus_coverage,
     cmd_corpus_gaps,
@@ -1143,6 +1148,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--organ",
         default=None,
         help="Filter to specific organ",
+    )
+    c_sync.add_argument(
+        "--diff",
+        action="store_true",
+        help="Show line-level diff of each changed AUTO section",
+    )
+    c_changelog = ctx_sub.add_parser(
+        "changelog",
+        help="Show the recorded history of context sync runs",
+    )
+    c_changelog.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Show only the most recent N runs",
+    )
+    c_changelog.add_argument(
+        "--json",
+        action="store_true",
+        help="Output JSON",
     )
     c_surfaces = ctx_sub.add_parser(
         "surfaces",
@@ -3313,6 +3338,7 @@ def main() -> int:
         ("pitch", "generate"): cmd_pitch_generate,
         ("pitch", "sync"): cmd_pitch_sync,
         ("context", "sync"): cmd_context_sync,
+        ("context", "changelog"): cmd_context_changelog,
         ("context", "surfaces"): cmd_context_surfaces,
         ("omega", "status"): cmd_omega_status,
         ("omega", "check"): cmd_omega_check,

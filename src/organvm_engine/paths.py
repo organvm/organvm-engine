@@ -210,6 +210,16 @@ def content_dir(config: PathConfig | None = None) -> Path:
     return resolve_path_config(config).content_dir()
 
 
+def context_sync_dir(config: PathConfig | None = None) -> Path:
+    """Directory for context-sync changelog artifacts."""
+    return corpus_dir(config) / "data" / "context-sync"
+
+
+def context_sync_changelog_path(config: PathConfig | None = None) -> Path:
+    """Path to the context-sync changelog.jsonl file."""
+    return context_sync_dir(config) / "changelog.jsonl"
+
+
 def fossil_dir(config: PathConfig | None = None) -> Path:
     """Directory for fossil record artifacts."""
     return corpus_dir(config) / "data" / "fossil"

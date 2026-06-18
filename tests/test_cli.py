@@ -64,6 +64,9 @@ class TestHelpOutput:
             ["pitch", "--help"],
             ["context", "--help"],
             ["context", "surfaces", "--help"],
+            ["handoff", "--help"],
+            ["handoff", "list", "--help"],
+            ["handoff", "clean", "--help"],
             ["deadlines", "--help"],
             ["ci", "--help"],
         ],
@@ -139,6 +142,25 @@ class TestDispatchTable:
         assert args.command == "context"
         assert args.subcommand == "surfaces"
         assert args.repo == "conversation-corpus-engine"
+
+    def test_handoff_subcommands_parse(self):
+        parser = build_parser()
+        args = parser.parse_args(["handoff", "list", "--workspace", "/tmp/ws", "--json"])
+        assert args.command == "handoff"
+        assert args.subcommand == "list"
+        assert args.workspace == "/tmp/ws"
+        assert args.json is True
+
+        clean = parser.parse_args(["handoff", "clean", "--older-than", "7d", "--write"])
+        assert clean.command == "handoff"
+        assert clean.subcommand == "clean"
+        assert clean.older_than == "7d"
+        assert clean.write is True
+
+        dry = parser.parse_args(["handoff", "clean", "--dry-run"])
+        assert dry.command == "handoff"
+        assert dry.subcommand == "clean"
+        assert dry.dry_run is True
 
 
 # ── Registry commands ────────────────────────────────────────────

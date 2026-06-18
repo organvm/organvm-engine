@@ -325,7 +325,13 @@ def sync_repo(
     """Sync a single repo's context file."""
     agent = filename.replace(".md", "").lower() if filename else None
     section = generate_repo_section(
-        repo_name, org, registry, seed, sop_entries=sop_entries, agent=agent,
+        repo_name,
+        org,
+        registry,
+        seed,
+        sop_entries=sop_entries,
+        agent=agent,
+        repo_path=str(repo_path),
     )
     file_path = repo_path / filename
     action = _inject_section(file_path, section, dry_run)

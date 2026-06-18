@@ -63,6 +63,20 @@ class TestPaths:
         monkeypatch.setattr(paths, "_DEFAULT_CODE_ROOT", code_root)
         assert paths.corpus_dir() == corpus
 
+    def test_corpus_dir_uses_consolidated_a_organvm_corpus(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("ORGANVM_WORKSPACE_DIR", raising=False)
+        husk = tmp_path / "ws" / "meta-organvm" / "organvm-corpvs-testamentvm"
+        husk.mkdir(parents=True)
+        (husk / "CLAUDE.md").write_text("husk")
+        corpus = tmp_path / "ws" / "a-organvm" / "organvm-corpvs-testamentvm"
+        corpus.mkdir(parents=True)
+        (corpus / "repo-registry.json").write_text("{}")
+        code_root = tmp_path / "code-organvm"
+        code_root.mkdir()
+        monkeypatch.setattr(paths, "_DEFAULT_WORKSPACE", tmp_path / "ws")
+        monkeypatch.setattr(paths, "_DEFAULT_CODE_ROOT", code_root)
+        assert paths.corpus_dir() == corpus
+
     def test_corpus_dir_prefers_legacy_when_it_holds_registry(self, tmp_path, monkeypatch):
         monkeypatch.delenv("ORGANVM_WORKSPACE_DIR", raising=False)
         legacy = tmp_path / "ws" / "meta-organvm" / "organvm-corpvs-testamentvm"

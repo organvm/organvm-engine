@@ -17,13 +17,15 @@ def cmd_ci_scaffold(args: argparse.Namespace) -> int:
 
     repo_name = getattr(args, "name", None) or repo_path.name
     dry_run = not getattr(args, "write", False)
+    explicit_steps = bool(args.lint or args.test or args.typecheck)
+    include_all = bool(args.all or not explicit_steps)
 
     result = scaffold_repo(
         repo_path=repo_path,
         repo_name=repo_name,
-        lint=args.lint or args.all,
-        test=args.test or args.all,
-        typecheck=args.typecheck or args.all,
+        lint=args.lint or include_all,
+        test=args.test or include_all,
+        typecheck=args.typecheck or include_all,
     )
 
     if args.json:

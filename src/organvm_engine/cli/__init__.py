@@ -999,8 +999,7 @@ def build_parser() -> argparse.ArgumentParser:
     ci_scaffold.add_argument(
         "--all",
         action="store_true",
-        default=True,
-        help="Include all steps (default)",
+        help="Include all steps (default when no step flags are selected)",
     )
     ci_scaffold.add_argument(
         "--dry-run",

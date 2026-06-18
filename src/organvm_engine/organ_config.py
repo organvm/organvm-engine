@@ -203,6 +203,8 @@ def _parse_topology_dict(data: Any) -> dict[str, dict[str, str]] | None:
     result: dict[str, dict[str, str]] = {}
     all_errors: list[str] = []
     for key, entry in organs_data.items():
+        if isinstance(key, str) and key.startswith("_"):
+            continue
         if not isinstance(entry, dict):
             all_errors.append(f"Organ '{key}' must be a dict")
             continue

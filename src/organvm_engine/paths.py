@@ -21,6 +21,7 @@ from pathlib import Path
 
 _DEFAULT_WORKSPACE = Path.home() / "Workspace"
 _DEFAULT_CORPUS_SUBPATH = "meta-organvm/organvm-corpvs-testamentvm"
+_DEFAULT_A_ORGANVM_SUBPATH = "a-organvm/organvm-corpvs-testamentvm"
 # Corpus relocated to the Code root (2026-06 consolidation). Bare launchd
 # daemons do not inherit shell-profile env vars, so corpus_dir() must be able
 # to find the real corpus without ORGANVM_CORPUS_DIR. A directory only counts
@@ -56,8 +57,10 @@ class PathConfig:
         env = os.environ.get("ORGANVM_CORPUS_DIR")
         if env:
             return _coerce_path(env)
-        legacy = self.workspace_root() / _DEFAULT_CORPUS_SUBPATH
-        for candidate in (legacy, _DEFAULT_CODE_ROOT / _CORPUS_REPO_NAME):
+        workspace = self.workspace_root()
+        legacy = workspace / _DEFAULT_CORPUS_SUBPATH
+        consolidated = workspace / _DEFAULT_A_ORGANVM_SUBPATH
+        for candidate in (legacy, consolidated, _DEFAULT_CODE_ROOT / _CORPUS_REPO_NAME):
             if _holds_registry(candidate):
                 return candidate
         return legacy

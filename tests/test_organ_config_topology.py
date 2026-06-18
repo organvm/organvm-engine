@@ -196,6 +196,18 @@ class TestValidation:
         assert "I" in result
         assert "BAD" not in result
 
+    def test_underscore_metadata_keys_are_ignored(self, tmp_path):
+        topology = {
+            "_comment": "metadata, not an organ",
+            "I": {"dir": "good", "registry_key": "ORGAN-I", "org": "good-org"},
+        }
+        path = tmp_path / "topology.json"
+        path.write_text(json.dumps(topology))
+        result = load_organ_topology(path)
+        assert result == {
+            "I": {"dir": "good", "registry_key": "ORGAN-I", "org": "good-org"},
+        }
+
     def test_non_dict_entry_rejected(self, tmp_path):
         bad = {"I": "not-a-dict"}
         path = tmp_path / "bad.json"

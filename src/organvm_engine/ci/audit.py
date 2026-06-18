@@ -21,7 +21,11 @@ from enum import Enum
 from pathlib import Path
 
 from organvm_engine.ci.mandate import _check_ci_workflows, _resolve_repo_path
-from organvm_engine.organ_config import registry_key_to_dir
+from organvm_engine.organ_config import (
+    get_topology_source,
+    load_organ_topology,
+    registry_key_to_dir,
+)
 from organvm_engine.paths import workspace_root
 
 
@@ -668,6 +672,8 @@ def run_infra_audit(
         InfraAuditReport with per-repo compliance results.
     """
     ws = workspace or workspace_root()
+    if get_topology_source() == "fallback":
+        load_organ_topology()
     key_to_dir = registry_key_to_dir()
     report = InfraAuditReport()
 

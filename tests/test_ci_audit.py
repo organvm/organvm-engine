@@ -331,6 +331,57 @@ class TestRunInfraAudit:
         assert report.total_repos == 1
         assert len(report.repos) == 1
 
+    def test_audit_resolves_consolidated_a_organvm_layout(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Audit uses loaded topology orgs for post-consolidation flat checkouts."""
+        from organvm_engine.organ_config import reset_topology
+
+        corpus = tmp_path / "a-organvm" / "organvm-corpvs-testamentvm"
+        corpus.mkdir(parents=True)
+        (corpus / "repo-registry.json").write_text("{}")
+        (corpus / "organ-topology.json").write_text(json.dumps({
+            "I": {"dir": "organvm", "registry_key": "ORGAN-I", "org": "a-organvm"},
+        }))
+        monkeypatch.setenv("ORGANVM_CORPUS_DIR", str(corpus))
+
+        repo = tmp_path / "a-organvm" / "repo-a"
+        repo.mkdir(parents=True)
+        (repo / "pyproject.toml").write_text("[project]\nname = 'repo-a'")
+        workflows = repo / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        (workflows / "ci.yml").write_text(
+            "name: CI\njobs:\n  test:\n    steps:\n      - run: pyright src/\n",
+        )
+        (repo / ".github" / "dependabot.yml").write_text("version: 2\n")
+
+        registry = {
+            "organs": {
+                "ORGAN-I": {
+                    "repositories": [
+                        {
+                            "name": "repo-a",
+                            "org": "organvm-i-theoria",
+                            "promotion_status": "LOCAL",
+                            "tier": "standard",
+                        },
+                    ],
+                },
+            },
+        }
+
+        try:
+            report = run_infra_audit(registry, workspace=tmp_path, repo_filter="repo-a")
+            assert report.total_repos == 1
+            result = report.repos[0]
+            assert result.repo_path == repo
+            typecheck = next(c for c in result.checks if c.mechanism == "type_checking")
+            assert typecheck.status == CheckStatus.PASS
+        finally:
+            reset_topology()
+
     def test_organ_filter(self, tmp_path: Path):
         registry = {
             "organs": {

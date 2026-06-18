@@ -1,5 +1,7 @@
 """Tests for ci/scaffold.py — CI workflow YAML generation."""
 
+import argparse
+import json
 from pathlib import Path
 
 import pytest
@@ -9,6 +11,7 @@ from organvm_engine.ci.scaffold import (
     detect_stack,
     scaffold_repo,
 )
+from organvm_engine.cli.ci import cmd_ci_scaffold
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -203,3 +206,62 @@ class TestCombinedYaml:
         assert "push:" in combined
         assert "pull_request:" in combined
         assert "branches: [main]" in combined
+
+    def test_combined_yaml_parses(self, python_repo: Path):
+        yaml = pytest.importorskip("yaml")
+        result = scaffold_repo(
+            python_repo,
+            "test-repo",
+            lint=False,
+            test=False,
+            typecheck=True,
+        )
+        parsed = yaml.safe_load(result.combined_yaml())
+        assert parsed["jobs"]["ci"]["steps"][1]["name"] == "Set up Python"
+        assert parsed["jobs"]["ci"]["steps"][3]["name"] == "Type check (pyright)"
+
+
+# ---------------------------------------------------------------------------
+# CLI flag behavior
+# ---------------------------------------------------------------------------
+
+class TestScaffoldCli:
+    def test_typecheck_flag_generates_typecheck_only(self, python_repo: Path, capsys):
+        args = argparse.Namespace(
+            path=str(python_repo),
+            name=None,
+            lint=False,
+            test=False,
+            typecheck=True,
+            all=False,
+            write=False,
+            json=True,
+        )
+
+        rc = cmd_ci_scaffold(args)
+        out = json.loads(capsys.readouterr().out)
+
+        assert rc == 0
+        assert "typecheck_step" in out
+        assert "lint_step" not in out
+        assert "test_step" not in out
+
+    def test_no_step_flags_defaults_to_all(self, python_repo: Path, capsys):
+        args = argparse.Namespace(
+            path=str(python_repo),
+            name=None,
+            lint=False,
+            test=False,
+            typecheck=False,
+            all=False,
+            write=False,
+            json=True,
+        )
+
+        rc = cmd_ci_scaffold(args)
+        out = json.loads(capsys.readouterr().out)
+
+        assert rc == 0
+        assert "lint_step" in out
+        assert "test_step" in out
+        assert "typecheck_step" in out

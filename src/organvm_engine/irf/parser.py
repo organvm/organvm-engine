@@ -112,15 +112,20 @@ def _extract_domain(item_id: str) -> str:
 
 
 def _parse_active_row(cells: list[str], status: str, section: str) -> IRFItem | None:
-    """Parse a 6-column active item row.
+    """Parse an active item row.
 
-    Expected columns: ID | Priority | Action | Owner | Source | Blocker
+    Expected columns: ID | Priority | Action | Owner | Source | Blocker.
+    Hand-appended tail rows sometimes stop after the Action cell; owner,
+    source, and blocker are optional for parse/stat purposes.
     """
-    if len(cells) < 6:
+    if len(cells) < 3:
         return None
-    raw_item_id, raw_priority, action, owner, source, blocker = (
-        cells[0], cells[1], cells[2], cells[3], cells[4], cells[5],
-    )
+    raw_item_id = cells[0]
+    raw_priority = cells[1]
+    action = cells[2]
+    owner = cells[3] if len(cells) > 3 else ""
+    source = cells[4] if len(cells) > 4 else ""
+    blocker = cells[5] if len(cells) > 5 else ""
     item_id = _strip_cell_markup(raw_item_id)
     priority = _clean_priority(raw_priority)
     # ID must look like IRF-XXX-NNN[a] or DONE-NNN[a]

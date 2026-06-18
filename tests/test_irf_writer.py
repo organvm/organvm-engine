@@ -73,6 +73,21 @@ def test_row_without_trailing_pipe_parses():
     assert "IRF-SYS-096" in _ids(CASES)
 
 
+def test_short_active_row_keeps_priority_and_action():
+    """Tail-added active rows may omit owner/source/blocker cells."""
+    items = {i.id: i for i in parse_irf(CASES)}
+    item = items["IRF-SYS-096"]
+    assert item.status == "open"
+    assert item.priority == "P2"
+    assert "Row without trailing pipe" in item.action
+
+
+def test_stats_count_short_tail_row_priority():
+    """Category E rows must contribute to priority stats, not just total."""
+    stats = irf_stats(parse_irf(CASES))
+    assert stats["by_priority"]["P2"] == 2
+
+
 def test_late_file_row_resolves():
     """IRF-OPS-088 — rows late in the file are reachable."""
     assert "IRF-OPS-087" in _ids(CASES)

@@ -297,6 +297,7 @@ from organvm_engine.cli.testament import (
     cmd_testament_record_session,
     cmd_testament_render,
     cmd_testament_status,
+    cmd_testament_summary,
 )
 from organvm_engine.cli.trivium import (
     cmd_trivium_dialects,
@@ -1928,6 +1929,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Render SVG identity cards for all repos",
     )
 
+    testament_summary = testament_sub.add_parser(
+        "summary",
+        help="Portal summary — payload for the stakeholder /testament/ route",
+    )
+    testament_summary.add_argument("--json", action="store_true", help="Emit JSON payload")
+    testament_summary.add_argument(
+        "--html",
+        action="store_true",
+        help="Render the /testament/ route HTML page",
+    )
+    testament_summary.add_argument(
+        "--output-dir",
+        default=None,
+        help="With --html, write testament.html to this directory",
+    )
+    testament_summary.add_argument("--registry", default=None, help="Registry path override")
+    testament_summary.add_argument(
+        "--base-dir",
+        default=None,
+        help="Catalog base directory override",
+    )
+
     testament_catalog = testament_sub.add_parser("catalog", help="List produced artifacts")
     testament_catalog.add_argument("--organ", default=None, help="Filter to organ")
     testament_catalog.add_argument("--json", action="store_true", help="JSON output")
@@ -3437,6 +3460,7 @@ def main() -> int:
     if args.command == "testament":
         testament_dispatch = {
             "status": cmd_testament_status,
+            "summary": cmd_testament_summary,
             "render": cmd_testament_render,
             "cascade": cmd_testament_cascade,
             "catalog": cmd_testament_catalog,

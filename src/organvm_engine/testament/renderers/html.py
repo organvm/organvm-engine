@@ -162,6 +162,168 @@ def render_gallery_page(
 </html>"""
 
 
+def render_testament_page(
+    summary: dict,
+    title: str = "ORGANVM Testament",
+    palette: dict | None = None,
+) -> str:
+    """Render the stakeholder portal's ``/testament/`` route as an HTML page.
+
+    Takes the dict produced by :func:`organvm_engine.testament.get_testament_summary`
+    and renders a self-contained dashboard page (no external assets). Used both
+    as a static export and as the payload the portal route serves.
+    """
+    p = palette or _default_palette()
+
+    system = summary.get("system", {})
+    omega = summary.get("omega", {})
+    densities = summary.get("densities", {})
+    sonic = summary.get("sonic", {})
+    catalog = summary.get("catalog", {})
+    network = summary.get("network", {})
+
+    met_pct = round(omega.get("met_ratio", 0) * 100)
+
+    def _stat(label: str, value: object) -> str:
+        return (
+            f'  <div class="stat">'
+            f'<span class="stat-value">{_esc(str(value))}</span>'
+            f'<span class="stat-label">{_esc(label)}</span></div>'
+        )
+
+    overview = "\n".join([
+        _stat("Repositories", system.get("total_repos", 0)),
+        _stat("Organs", system.get("total_organs", 0)),
+        _stat("Public", system.get("total_public", 0)),
+        _stat("Omega", f"{omega.get('met_count', 0)}/{omega.get('total', 17)}"),
+        _stat("Maturity", f"{met_pct}%"),
+        _stat("Artifacts", catalog.get("total", 0)),
+    ])
+
+    density_rows = "\n".join(
+        f'    <tr><td>{_esc(organ)}</td>'
+        f'<td><div class="bar"><div class="bar-fill" style="width:{round(val * 100)}%"></div></div></td>'
+        f'<td class="num">{round(val * 100)}%</td></tr>'
+        for organ, val in sorted(densities.items(), key=lambda kv: -kv[1])
+    ) or '    <tr><td colspan="3" class="muted">no density data</td></tr>'
+
+    exec_order = network.get("execution_order", [])
+    exec_html = " → ".join(_esc(str(n)) for n in exec_order) or "—"
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{_esc(title)}</title>
+<style>
+  :root {{
+    --bg: {p['background']};
+    --surface: {p['secondary']};
+    --primary: {p['primary']};
+    --accent: {p['accent']};
+    --text: {p['text']};
+    --muted: {p['muted']};
+  }}
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{
+    background: var(--bg);
+    color: var(--text);
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 960px;
+    margin: 0 auto;
+  }}
+  h1 {{
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+  }}
+  .subtitle {{ font-size: 0.8rem; color: var(--muted); margin-bottom: 2rem; }}
+  h2 {{
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    margin: 2rem 0 0.8rem;
+  }}
+  .stats {{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+  }}
+  .stat {{
+    background: var(--surface);
+    border: 1px solid var(--primary);
+    border-radius: 6px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }}
+  .stat-value {{ font-size: 1.6rem; font-weight: 700; color: var(--text); }}
+  .stat-label {{
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }}
+  table {{ width: 100%; border-collapse: collapse; font-size: 0.8rem; }}
+  td {{ padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--primary); }}
+  td.num {{ text-align: right; color: var(--muted); }}
+  .muted {{ color: var(--muted); }}
+  .bar {{ background: var(--bg); border-radius: 4px; height: 8px; overflow: hidden; }}
+  .bar-fill {{ background: var(--accent); height: 100%; }}
+  .sonic, .network {{
+    background: var(--surface);
+    border: 1px solid var(--primary);
+    border-radius: 6px;
+    padding: 1rem;
+    font-size: 0.8rem;
+  }}
+  footer {{
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--primary);
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-align: center;
+  }}
+</style>
+</head>
+<body>
+<h1>{_esc(title)}</h1>
+<p class="subtitle">The system's generative self-portrait — rendered for the stakeholder portal</p>
+
+<h2>Overview</h2>
+<div class="stats">
+{overview}
+</div>
+
+<h2>Organ Density</h2>
+<table>
+{density_rows}
+</table>
+
+<h2>Sonic Self-Portrait</h2>
+<div class="sonic">
+  {sonic.get('voices', 0)} voices · {sonic.get('bpm', 120)} BPM ·
+  {sonic.get('time_signature', '4/4')} · master amplitude {sonic.get('master_amplitude', 0)}
+</div>
+
+<h2>Feedback Network</h2>
+<div class="network">
+  {network.get('nodes', 0)} nodes · {network.get('feedback_edges', 0)} feedback edges<br>
+  <span class="muted">execution order:</span> {exec_html}
+</div>
+
+<footer>ORGANVM TESTAMENT — structural self-awareness through continuous self-description</footer>
+</body>
+</html>"""
+
+
 def render_organ_card_html(
     organ_key: str,
     organ_name: str,

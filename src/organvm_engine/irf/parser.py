@@ -44,10 +44,9 @@ class IRFItem:
 # Matches a ## section header (## or ###, not ####)
 _SECTION_RE = re.compile(r"^(#{2,3})\s+(.+)$")
 
-# Matches a pipe-delimited table row with at least 4 non-separator cells.
-# We accept rows like:  | cell | cell | cell | cell |
-# A trailing pipe is optional — hand-appended rows sometimes lack it.
-_ROW_RE = re.compile(r"^\|(.+?)\|?$")
+# Matches a pipe-delimited table row. Markdown permits either edge pipe to be
+# omitted, and hand-appended tail rows commonly use that compact form.
+_ROW_RE = re.compile(r"^\s*\|?.+?\|.*$")
 
 # A separator row contains only hyphens, pipes, colons, and spaces.
 _SEPARATOR_RE = re.compile(r"^[\|\-\:\s]+$")
@@ -64,7 +63,7 @@ _DONE_REF_RE = re.compile(r"^DONE-\d+[a-z]?$")
 
 def _cells(raw_row: str) -> list[str]:
     """Split a raw markdown table row into stripped cell strings."""
-    return [c.strip() for c in raw_row.strip("|").split("|")]
+    return [c.strip() for c in raw_row.strip().strip("|").split("|")]
 
 
 def _strip_cell_markup(value: str) -> str:
@@ -243,7 +242,7 @@ def parse_irf_diagnostics(path: Path) -> tuple[list[IRFItem], list[tuple[int, st
             continue
 
         # Skip separator rows
-        if _SEPARATOR_RE.match(line):
+        if _SEPARATOR_RE.fullmatch(line):
             continue
 
         cells = _cells(line)

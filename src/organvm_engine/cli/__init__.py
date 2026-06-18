@@ -105,6 +105,7 @@ from organvm_engine.cli.corpus import (
     cmd_corpus_trace,
 )
 from organvm_engine.cli.deadlines import cmd_deadlines
+from organvm_engine.cli.handoff import cmd_handoff_check, cmd_handoff_list
 from organvm_engine.cli.debt import cmd_debt_scan, cmd_debt_stats
 from organvm_engine.cli.dispatch import cmd_dispatch_validate
 from organvm_engine.cli.ecosystem import (
@@ -830,6 +831,34 @@ def build_parser() -> argparse.ArgumentParser:
         "--all",
         action="store_true",
         help="Show all deadlines regardless of date",
+    )
+
+    # handoff
+    ho = sub.add_parser(
+        "handoff",
+        help="Workspace-wide agent handoff listing and staleness checks",
+    )
+    ho_sub = ho.add_subparsers(dest="subcommand")
+    ho_list = ho_sub.add_parser("list", help="List active handoffs across the workspace")
+    ho_list.add_argument("--workspace", help="Workspace root (default: resolved workspace)")
+    ho_list.add_argument(
+        "--stale-hours",
+        type=float,
+        default=24.0,
+        help="Age threshold in hours for staleness (default 24)",
+    )
+    ho_list.add_argument("--stale", action="store_true", help="Show only stale handoffs")
+    ho_list.add_argument("--json", action="store_true", help="Emit JSON")
+    ho_check = ho_sub.add_parser(
+        "check",
+        help="Exit non-zero if any handoff is stale (for CI / session review)",
+    )
+    ho_check.add_argument("--workspace", help="Workspace root (default: resolved workspace)")
+    ho_check.add_argument(
+        "--stale-hours",
+        type=float,
+        default=24.0,
+        help="Age threshold in hours for staleness (default 24)",
     )
 
     # corpus
@@ -3338,6 +3367,16 @@ def main() -> int:
         return cmd_status(args)
     if args.command == "deadlines":
         return cmd_deadlines(args)
+    if args.command == "handoff":
+        handoff_dispatch = {
+            "list": cmd_handoff_list,
+            "check": cmd_handoff_check,
+        }
+        handler = handoff_dispatch.get(getattr(args, "subcommand", "") or "")
+        if handler:
+            return handler(args)
+        parser.parse_args(["handoff", "--help"])
+        return 0
     if args.command == "completion":
         return cmd_completion(args)
     if args.command == "refresh":

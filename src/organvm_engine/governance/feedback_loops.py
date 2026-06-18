@@ -171,10 +171,14 @@ def _canonical_negative_loops() -> list[FeedbackLoop]:
             stratum=LoopStratum.TOOLING,
             description=(
                 "FRAME→SHAPE→BUILD→PROVE→DONE lifecycle prevents premature "
-                "implementation. Hard gates enforce sequential progression."
+                "implementation. Score→Rehearse→Perform metadata gates appetite, "
+                "micro-spec, verification, regression/postmortem, and export."
             ),
             nodes=["conductor", "session"],
-            governing_mechanism="conductor session lifecycle (ORGAN-IV)",
+            governing_mechanism=(
+                "coordination/lifecycle.py conductor_ritual_contract() + "
+                "conductor session lifecycle (ORGAN-IV)"
+            ),
         ),
         FeedbackLoop(
             name="registry-boundary",

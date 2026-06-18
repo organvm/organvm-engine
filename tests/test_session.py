@@ -283,6 +283,11 @@ class TestSessionExport:
         assert "--unabridged" in content
         assert "organvm session prompts test-123" in content
         assert "Source JSONL" in content
+        assert "## Conductor Ritual Metadata" in content
+        assert "conductor_lifecycle" in content
+        assert "`FRAME -> SHAPE -> BUILD -> PROVE -> DONE`" in content
+        assert "conductor_ritual_stage" in content
+        assert "`perform`" in content
 
     def test_export_write(self, tmp_path):
         meta = SessionMeta(

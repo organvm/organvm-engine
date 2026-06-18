@@ -341,6 +341,7 @@ class TestRegistryCommands:
         parser = build_parser()
         args = parser.parse_args(["registry", "list", "--format", "json"])
         assert args.format == "json"
+        assert args.json is False
 
     def test_registry_validate_passes(self, capsys):
         with patch("sys.argv", ["organvm", "--registry", MOCK_REGISTRY, "registry", "validate"]):

@@ -999,7 +999,6 @@ def build_parser() -> argparse.ArgumentParser:
     ci_scaffold.add_argument(
         "--all",
         action="store_true",
-        default=True,
         help="Include all steps (default)",
     )
     ci_scaffold.add_argument(

@@ -4,6 +4,17 @@ import argparse
 import json
 
 
+def _requested_scaffold_capabilities(args: argparse.Namespace) -> tuple[bool, bool, bool]:
+    """Resolve lint/test/typecheck booleans from scaffold CLI flags."""
+    requested_specific = bool(args.lint or args.test or args.typecheck)
+    include_all = bool(args.all or not requested_specific)
+    return (
+        bool(args.lint or include_all),
+        bool(args.test or include_all),
+        bool(args.typecheck or include_all),
+    )
+
+
 def cmd_ci_scaffold(args: argparse.Namespace) -> int:
     """Generate CI workflow YAML for a repo (lint/test/typecheck steps)."""
     from pathlib import Path
@@ -17,19 +28,22 @@ def cmd_ci_scaffold(args: argparse.Namespace) -> int:
 
     repo_name = getattr(args, "name", None) or repo_path.name
     dry_run = not getattr(args, "write", False)
+    lint, test, typecheck = _requested_scaffold_capabilities(args)
 
     result = scaffold_repo(
         repo_path=repo_path,
         repo_name=repo_name,
-        lint=args.lint or args.all,
-        test=args.test or args.all,
-        typecheck=args.typecheck or args.all,
+        lint=lint,
+        test=test,
+        typecheck=typecheck,
     )
+    target = repo_path / ".github" / "workflows" / result.workflow_filename()
 
     if args.json:
         out = {
             "repo": result.repo_name,
             "stack": result.stack.value,
+            "workflow_file": str(target),
         }
         if result.lint_yaml:
             out["lint_step"] = result.lint_yaml
@@ -49,13 +63,12 @@ def cmd_ci_scaffold(args: argparse.Namespace) -> int:
 
     if dry_run:
         print(f"# Stack detected: {result.stack.value}")
-        print(f"# Would write to: {repo_path / '.github' / 'workflows' / 'ci.yml'}")
+        print(f"# Would write to: {target}")
         print()
         print(combined)
     else:
         wf_dir = repo_path / ".github" / "workflows"
         wf_dir.mkdir(parents=True, exist_ok=True)
-        target = wf_dir / "ci.yml"
         target.write_text(combined)
         print(f"Wrote {target}")
 

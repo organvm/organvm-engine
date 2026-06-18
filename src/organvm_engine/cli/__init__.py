@@ -2880,6 +2880,55 @@ def build_parser() -> argparse.ArgumentParser:
     debt_stats_p.add_argument("--path", default=None, help="Scan a specific directory instead")
     debt_stats_p.add_argument("--json", action="store_true", help="Output JSON")
 
+    # handoff — agent handoff discovery and staleness detection
+    handoff = sub.add_parser(
+        "handoff",
+        help="Discover agent handoffs across the workspace and flag stale ones",
+    )
+    handoff_sub = handoff.add_subparsers(dest="subcommand")
+
+    handoff_list = handoff_sub.add_parser(
+        "list",
+        help="List .conductor/active-handoff.md files across all organ repos",
+    )
+    handoff_list.add_argument("--organ", default=None, help="Limit to one organ (e.g. META, I)")
+    handoff_list.add_argument("--workspace", default=None, help="Workspace root to scan")
+    handoff_list.add_argument(
+        "--include-archived",
+        dest="include_archived",
+        action="store_true",
+        help="Also list resolved handoffs under .conductor/archive/",
+    )
+    handoff_list.add_argument(
+        "--stale-days",
+        dest="stale_days",
+        type=int,
+        default=None,
+        help="Age (days) past which an active handoff is stale (default 7)",
+    )
+    handoff_list.add_argument(
+        "--stale-only",
+        dest="stale_only",
+        action="store_true",
+        help="Show only stale handoffs",
+    )
+    handoff_list.add_argument("--json", action="store_true", help="Output JSON")
+
+    handoff_check = handoff_sub.add_parser(
+        "check",
+        help="Flag stale active handoffs (non-zero exit when any are found)",
+    )
+    handoff_check.add_argument("--organ", default=None, help="Limit to one organ (e.g. META, I)")
+    handoff_check.add_argument("--workspace", default=None, help="Workspace root to scan")
+    handoff_check.add_argument(
+        "--stale-days",
+        dest="stale_days",
+        type=int,
+        default=None,
+        help="Age (days) past which an active handoff is stale (default 7)",
+    )
+    handoff_check.add_argument("--json", action="store_true", help="Output JSON")
+
     # irf — Index Rerum Faciendarum
     irf = sub.add_parser(
         "irf",
@@ -3631,6 +3680,21 @@ def main() -> int:
         if handler:
             return handler(args)
         parser.parse_args(["debt", "--help"])
+        return 0
+    if args.command == "handoff":
+        from organvm_engine.cli.handoff import cmd_handoff_check, cmd_handoff_list
+
+        handoff_dispatch = {
+            "list": cmd_handoff_list,
+            "check": cmd_handoff_check,
+        }
+        handler = handoff_dispatch.get(getattr(args, "subcommand", "") or "")
+        if handler:
+            return handler(args)
+        # Default to list when no subcommand given
+        if not (getattr(args, "subcommand", "") or ""):
+            return cmd_handoff_list(args)
+        parser.parse_args(["handoff", "--help"])
         return 0
     if args.command == "irf":
         irf_dispatch = {

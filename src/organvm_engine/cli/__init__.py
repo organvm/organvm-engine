@@ -1140,6 +1140,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Actually write changes (overrides --dry-run)",
     )
     c_sync.add_argument(
+        "--diff",
+        action="store_true",
+        help="Print unified diffs for generated context sections",
+    )
+    c_sync.add_argument(
         "--organ",
         default=None,
         help="Filter to specific organ",

@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from textwrap import dedent
+from textwrap import dedent, indent
 
 
 class Stack(str, Enum):
@@ -182,7 +182,9 @@ def _wrap_workflow(repo_name: str, stack: Stack, steps_block: str) -> str:
       - name: Install Node dependencies
         run: npm ci"""))
 
-    setup_block = "\n".join(setup_lines)
+    setup_block = "\n".join(setup_lines).strip()
+    setup_block = indent(setup_block, "      ") if setup_block else ""
+    steps_block = indent(steps_block.strip(), "      ")
 
     return dedent(f"""\
 # CI workflow for {repo_name}

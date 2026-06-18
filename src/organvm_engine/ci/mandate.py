@@ -10,11 +10,17 @@ so it can be consumed by governance audit, MCP server, and CLI.
 
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from organvm_engine.organ_config import registry_key_to_dir
-from organvm_engine.paths import workspace_root
+from organvm_engine.organ_config import (
+    get_organ_map,
+    get_topology_source,
+    load_organ_topology,
+    registry_key_to_dir,
+)
+from organvm_engine.paths import additional_workspace_roots, corpus_dir, workspace_root
 
 
 @dataclass
@@ -99,19 +105,42 @@ def _resolve_repo_path(
 
     Strategy:
     1. Use organ directory mapping from organ_config
-    2. Fall back to org name as directory
+    2. Use the loaded topology's GitHub org directory, if present
+    3. Fall back to registry org name as directory
+    4. Fall back to the corpus parent and any configured flat workspace roots
     """
-    # Map registry key to workspace directory
+    candidates: list[Path] = []
+
+    def add(candidate: Path) -> None:
+        if candidate not in candidates:
+            candidates.append(candidate)
+
     organ_dir = key_to_dir.get(organ_key)
     if organ_dir:
-        candidate = ws / organ_dir / repo_name
+        add(ws / organ_dir / repo_name)
+
+    for entry in get_organ_map().values():
+        if entry.get("registry_key") != organ_key:
+            continue
+        topo_dir = entry.get("dir")
+        topo_org = entry.get("org")
+        if topo_dir:
+            add(ws / topo_dir / repo_name)
+        if topo_org:
+            add(ws / topo_org / repo_name)
+
+    if org:
+        add(ws / org / repo_name)
+
+    with suppress(OSError):
+        add(corpus_dir().parent / repo_name)
+
+    for root in additional_workspace_roots(workspace=ws):
+        add(root / repo_name)
+
+    for candidate in candidates:
         if candidate.is_dir():
             return candidate
-
-    # Fall back to org-name directory
-    candidate = ws / org / repo_name
-    if candidate.is_dir():
-        return candidate
 
     # Special case: .github repos may be at org level
     if repo_name == ".github" and organ_dir:
@@ -150,6 +179,8 @@ def verify_ci_mandate(
         CIMandateReport with per-repo verification results.
     """
     ws = workspace or workspace_root()
+    if get_topology_source() == "fallback":
+        load_organ_topology()
     key_to_dir = registry_key_to_dir()
     report = CIMandateReport()
 

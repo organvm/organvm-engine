@@ -284,6 +284,63 @@ def test_discover_plans_project_filter(tmp_path):
     assert results[0].slug == "a"
 
 
+def test_discover_plans_concrete_project_filter_is_not_prefix_match(tmp_path):
+    target = tmp_path / "project"
+    target_plans = target / ".claude" / "plans"
+    target_plans.mkdir(parents=True)
+    (target_plans / "2026-01-01-target.md").write_text("# Target\n")
+
+    sibling_plans = tmp_path / "project-other" / ".claude" / "plans"
+    sibling_plans.mkdir(parents=True)
+    (sibling_plans / "2026-01-01-sibling.md").write_text("# Sibling\n")
+
+    results = discover_plans(workspace=tmp_path, project_filter=str(target))
+    assert len(results) == 1
+    assert results[0].slug == "target"
+
+
+def test_discover_plans_dot_project_filter_scans_cwd(tmp_path, monkeypatch):
+    target = tmp_path / "project"
+    target_plans = target / ".claude" / "plans"
+    target_plans.mkdir(parents=True)
+    (target_plans / "2026-01-01-target.md").write_text("# Target\n")
+
+    sibling_plans = tmp_path / "project-other" / ".claude" / "plans"
+    sibling_plans.mkdir(parents=True)
+    (sibling_plans / "2026-01-01-sibling.md").write_text("# Sibling\n")
+
+    monkeypatch.chdir(target)
+    results = discover_plans(workspace=tmp_path, project_filter=".")
+    assert len(results) == 1
+    assert results[0].slug == "target"
+
+
+def test_discover_plans_absolute_project_filter_without_workspace(tmp_path):
+    target = tmp_path / "project"
+    target_plans = target / ".claude" / "plans"
+    target_plans.mkdir(parents=True)
+    (target_plans / "2026-01-01-target.md").write_text("# Target\n")
+
+    missing_workspace = tmp_path / "missing-workspace"
+    results = discover_plans(workspace=missing_workspace, project_filter=str(target))
+    assert len(results) == 1
+    assert results[0].slug == "target"
+
+
+def test_discover_plans_prunes_dependency_trees(tmp_path):
+    plans_dir = tmp_path / "project" / ".claude" / "plans"
+    plans_dir.mkdir(parents=True)
+    (plans_dir / "2026-01-01-plan.md").write_text("# Plan\n")
+
+    ignored = tmp_path / "project" / "node_modules" / "pkg" / ".claude" / "plans"
+    ignored.mkdir(parents=True)
+    (ignored / "2026-01-01-ignored.md").write_text("# Ignored\n")
+
+    results = discover_plans(workspace=tmp_path)
+    assert len(results) == 1
+    assert results[0].slug == "plan"
+
+
 def test_discover_plans_since_filter(tmp_path):
     plans_dir = tmp_path / "proj" / ".claude" / "plans"
     plans_dir.mkdir(parents=True)

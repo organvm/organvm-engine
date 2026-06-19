@@ -8,6 +8,7 @@ inventories and matrices.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,29 @@ AGENT_PLAN_DIRS: dict[str, str] = {
     "claude": ".claude/plans",
     "gemini": ".gemini/plans",
     "codex": ".codex/plans",
+}
+
+PLAN_SEARCH_PRUNE_DIRS = {
+    ".cache",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".next",
+    ".nox",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".turbo",
+    ".venv",
+    "__pycache__",
+    "build",
+    "coverage",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    "vendor",
 }
 
 
@@ -174,7 +198,12 @@ def discover_plans(
     if include_global is None:
         include_global = workspace is None
 
-    ws = workspace or Path.home() / "Workspace"
+    if workspace is None:
+        from organvm_engine.paths import workspace_root
+
+        ws = workspace_root()
+    else:
+        ws = Path(workspace)
 
     # Determine which agents to scan
     agents_to_scan = (
@@ -184,20 +213,27 @@ def discover_plans(
     )
 
     # 1. Project-level plans: <workspace>/**/.{agent}/plans/*.md
-    if ws.is_dir():
-        for agent_name, agent_dir in agents_to_scan.items():
-            for plans_dir in ws.rglob(agent_dir):
-                if not plans_dir.is_dir():
-                    continue
-                project_path = str(plans_dir.parent.parent)
-                if project_filter and project_filter not in project_path:
-                    continue
-                for md in sorted(plans_dir.glob("*.md")):
-                    plan = _parse_plan_file(
-                        md, project_path, agent=agent_name, workspace=ws,
-                    )
-                    if plan:
-                        results.append(plan)
+    project_search_root = _project_filter_search_root(ws, project_filter)
+
+    if ws.is_dir() or project_search_root is not None:
+        for agent_name, plans_dir in _iter_project_plan_dirs(
+            ws,
+            agents_to_scan,
+            search_root=project_search_root,
+        ):
+            project_path = str(plans_dir.parent.parent)
+            if (
+                project_filter
+                and project_search_root is None
+                and project_filter not in project_path
+            ):
+                continue
+            for md in sorted(plans_dir.glob("*.md")):
+                plan = _parse_plan_file(
+                    md, project_path, agent=agent_name, workspace=ws,
+                )
+                if plan:
+                    results.append(plan)
 
     # 2. Project plans inside ~/.claude/projects/*/plans/ (Claude-only)
     if include_global and CLAUDE_PROJECTS_DIR.is_dir() and agent in (None, "claude"):
@@ -255,6 +291,71 @@ def discover_plans(
     # Sort by date descending
     deduped.sort(key=lambda p: p.date, reverse=True)
     return deduped
+
+
+def _iter_project_plan_dirs(
+    workspace: Path,
+    agents_to_scan: dict[str, str],
+    search_root: Path | None = None,
+) -> list[tuple[str, Path]]:
+    """Find project-local agent plan directories without unbounded rglob.
+
+    ``Path.rglob(".claude/plans")`` descends through every dependency,
+    build, and VCS directory in large repos before it can report a result.
+    This walker checks each directory for the fixed agent-plan shapes and
+    prunes directories that cannot contain authored plan inventories.
+    """
+    roots = [search_root if search_root is not None else workspace]
+    agent_roots = {Path(rel).parts[0] for rel in agents_to_scan.values()}
+    results: list[tuple[str, Path]] = []
+
+    for root in roots:
+        if not root.is_dir():
+            continue
+
+        for current, dirnames, _filenames in os.walk(root, topdown=True, followlinks=False):
+            current_path = Path(current)
+            present = set(dirnames)
+
+            for agent_name, agent_rel in agents_to_scan.items():
+                agent_root, plans_leaf = Path(agent_rel).parts
+                if agent_root not in present:
+                    continue
+                plans_dir = current_path / agent_root / plans_leaf
+                if plans_dir.is_dir():
+                    results.append((agent_name, plans_dir))
+
+            dirnames[:] = [
+                name
+                for name in dirnames
+                if name not in PLAN_SEARCH_PRUNE_DIRS and name not in agent_roots
+            ]
+
+    return results
+
+
+def _project_filter_search_root(workspace: Path, project_filter: str | None) -> Path | None:
+    """Return a concrete directory root when a project filter names one."""
+    if not project_filter:
+        return None
+
+    raw = Path(project_filter).expanduser()
+    if raw.is_absolute():
+        candidates = [raw]
+    elif raw == Path("."):
+        candidates = [Path.cwd(), workspace / raw]
+    else:
+        candidates = [workspace / raw, Path.cwd() / raw]
+
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            continue
+        if resolved.is_dir():
+            return resolved
+
+    return None
 
 
 def _discover_governance_plans(

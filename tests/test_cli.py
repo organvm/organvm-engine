@@ -15,6 +15,7 @@ from unittest.mock import patch
 import pytest
 
 from organvm_engine.cli import build_parser, main
+from organvm_engine.cli.context import cmd_context_sync
 
 FIXTURES = Path(__file__).parent / "fixtures"
 MOCK_REGISTRY = str(FIXTURES / "registry-minimal.json")
@@ -556,6 +557,60 @@ class TestDryRunFlags:
         parser = build_parser()
         args = parser.parse_args(["context", "sync", "--dry-run"])
         assert args.dry_run is True
+
+    def test_context_sync_has_diff(self):
+        parser = build_parser()
+        args = parser.parse_args(["context", "sync", "--diff"])
+        assert args.diff is True
+
+    def test_context_sync_prints_changelog(self, monkeypatch, capsys):
+        import organvm_engine.contextmd.sync as sync_mod
+
+        def fake_sync_all(**kwargs):
+            return {
+                "updated": ["/tmp/CLAUDE.md"],
+                "created": [],
+                "skipped": [],
+                "errors": [],
+                "dry_run": kwargs["dry_run"],
+                "changes": [
+                    {
+                        "path": "/tmp/CLAUDE.md",
+                        "action": "updated",
+                        "added_lines": 2,
+                        "removed_lines": 1,
+                        "diff": "--- before\n+++ after\n-old\n+new\n+line",
+                    },
+                ],
+                "changelog": [
+                    {
+                        "path": "/tmp/CLAUDE.md",
+                        "action": "updated",
+                        "added_lines": 2,
+                        "removed_lines": 1,
+                        "diff": "--- before\n+++ after\n-old\n+new\n+line",
+                    },
+                ],
+            }
+
+        monkeypatch.setattr(sync_mod, "sync_all", fake_sync_all)
+        args = argparse.Namespace(
+            workspace=None,
+            registry=MOCK_REGISTRY,
+            organ=None,
+            write=False,
+            diff=True,
+        )
+
+        rc = cmd_context_sync(args)
+
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "Changelog" in out
+        assert "M /tmp/CLAUDE.md (+2/-1)" in out
+        assert "Diff" in out
+        assert "-old" in out
+        assert "+new" in out
 
     def test_context_surfaces_has_json_flag(self):
         parser = build_parser()

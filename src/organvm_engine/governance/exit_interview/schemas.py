@@ -238,8 +238,11 @@ class Testimony:
     # Axiom alignment
     axiom_alignment: list[AxiomClaim] = field(default_factory=list)
 
+    # Documentation-specific evidence (Markdown/YAML/JSON/SOP analysis)
+    documentation: dict = field(default_factory=dict)
+
     def to_dict(self) -> dict:
-        return {
+        data = {
             "identity": {
                 "v1_path": self.v1_path,
                 "v2_mechanism": self.v2_mechanism,
@@ -261,6 +264,9 @@ class Testimony:
             },
             "axiom_alignment": [a.to_dict() for a in self.axiom_alignment],
         }
+        if self.documentation:
+            data["documentation"] = self.documentation
+        return data
 
 
 # ---------------------------------------------------------------------------

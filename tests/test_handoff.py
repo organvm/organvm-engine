@@ -73,6 +73,28 @@ def test_list_handoffs_classifies_active_stale_and_expired(tmp_path):
     }
 
 
+def test_handoff_scan_skips_file_removed_after_discovery(tmp_path, monkeypatch):
+    now = datetime(2026, 6, 1, 12, tzinfo=timezone.utc)
+    workspace = tmp_path / "workspace"
+    handoff = _write_handoff(workspace / "organ" / "race-repo")
+
+    def discover_then_remove(_root):
+        if handoff.exists():
+            handoff.unlink()
+        return [handoff]
+
+    monkeypatch.setattr("organvm_engine.handoff._discover_handoff_paths", discover_then_remove)
+
+    assert list_handoffs(workspace, now=now) == []
+    assert clean_handoffs(workspace, dry_run=False, now=now) == {
+        "removed": [],
+        "kept": [],
+        "errors": [],
+        "dry_run": False,
+        "older_than": None,
+    }
+
+
 def test_missing_metadata_uses_mtime_for_staleness(tmp_path):
     now = datetime(2026, 6, 1, 12, tzinfo=timezone.utc)
     repo = tmp_path / "repo"

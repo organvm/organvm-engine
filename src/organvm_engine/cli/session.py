@@ -526,7 +526,9 @@ def cmd_session_review(args: argparse.Namespace) -> int:
     # Check for uncommitted files (Nothing Local Only enforcement)
     try:
         from organvm_engine.git.status import check_uncommitted_files
-        uncommitted = check_uncommitted_files()
+
+        project_path = meta.cwd or meta.project_dir or None
+        uncommitted = check_uncommitted_files(project_path=project_path, timeout=5)
         if uncommitted:
             print("\nWARNING: Uncommitted files detected (Nothing Local Only covenant violation):")
             for report in uncommitted:

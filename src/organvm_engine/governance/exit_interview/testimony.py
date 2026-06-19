@@ -493,8 +493,7 @@ def _doc_dir_stats(dir_path: Path) -> dict:
         code_blocks += stats.get("code_blocks", 0)
         scan_parts.append(stats.get("scan_text", ""))
         modified = stats.get("last_modified", "")
-        if modified > last_modified:
-            last_modified = modified
+        last_modified = max(last_modified, modified)
         if not preferred_title and doc.stem.lower() in {"readme", "index"}:
             preferred_title = stats.get("title", "")
 
@@ -711,10 +710,7 @@ def generate_testimony(
     # Analyze the artifact. Documentation-only trees (markdown, no Python) are
     # read as prose; everything else is analyzed as Python source via AST.
     if fs_path.is_dir():
-        if _is_doc_directory(fs_path):
-            stats = _doc_dir_stats(fs_path)
-        else:
-            stats = _dir_stats(fs_path)
+        stats = _doc_dir_stats(fs_path) if _is_doc_directory(fs_path) else _dir_stats(fs_path)
     elif fs_path.exists():
         if _is_doc_file(fs_path):
             stats = _doc_file_stats(fs_path)

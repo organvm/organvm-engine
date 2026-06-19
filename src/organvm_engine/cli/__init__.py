@@ -3,7 +3,7 @@
 Usage:
     organvm status
     organvm registry show <repo>
-    organvm registry list [--organ X] [--status X] [--tier X]
+    organvm registry list [--organ X] [--status X] [--tier X] [--format json]
     organvm registry search <query> [--field X] [--exact]
     organvm registry deps <repo> [--reverse] [--transitive]
     organvm registry stats [--json]
@@ -360,6 +360,12 @@ def build_parser() -> argparse.ArgumentParser:
     ls_archived = ls.add_mutually_exclusive_group()
     ls_archived.add_argument("--archived", action="store_true")
     ls_archived.add_argument("--unarchived", action="store_true")
+    ls.add_argument(
+        "--format",
+        choices=["table", "json"],
+        default="table",
+        help="Output format",
+    )
     ls.add_argument("--json", action="store_true", help="Output JSON")
 
     search = reg_sub.add_parser("search", help="Search repos by text query")

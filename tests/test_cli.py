@@ -278,6 +278,31 @@ class TestRegistryCommands:
         for key in ("name", "organ", "status", "tier", "promotion", "org"):
             assert key in entry, f"Missing key: {key}"
 
+    def test_registry_list_format_json(self, capsys):
+        with patch(
+            "sys.argv",
+            [
+                "organvm",
+                "--registry",
+                MOCK_REGISTRY,
+                "registry",
+                "list",
+                "--organ",
+                "META",
+                "--format",
+                "json",
+            ],
+        ):
+            rc = main()
+        assert rc == 0
+        import json
+
+        out = capsys.readouterr().out
+        data = json.loads(out)
+        assert len(data) == 2
+        assert all(entry["organ"] == "META-ORGANVM" for entry in data)
+        assert "Name" not in out
+
     def test_registry_list_json_with_organ_filter(self, capsys):
         with patch(
             "sys.argv",
@@ -310,6 +335,11 @@ class TestRegistryCommands:
         parser = build_parser()
         args = parser.parse_args(["registry", "list", "--json"])
         assert args.json is True
+
+    def test_registry_list_format_json_flag_parses(self):
+        parser = build_parser()
+        args = parser.parse_args(["registry", "list", "--format", "json"])
+        assert args.format == "json"
 
     def test_registry_validate_passes(self, capsys):
         with patch("sys.argv", ["organvm", "--registry", MOCK_REGISTRY, "registry", "validate"]):

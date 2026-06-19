@@ -146,12 +146,10 @@ def _python_typecheck_target(repo_path: Path) -> str:
     if _pyproject_uses_src_layout(repo_path / "pyproject.toml"):
         return "src/"
 
-    top_level_packages = [
-        child
-        for child in repo_path.iterdir()
-        if child.is_dir() and (child / "__init__.py").is_file()
-    ]
-    if top_level_packages:
+    if _pyproject_declares_flat_layout(repo_path / "pyproject.toml"):
+        return "."
+
+    if _has_flat_layout_python_sources(repo_path):
         return "."
 
     return "src/"
@@ -159,12 +157,8 @@ def _python_typecheck_target(repo_path: Path) -> str:
 
 def _pyproject_uses_src_layout(pyproject_path: Path) -> bool:
     """Return True when pyproject explicitly declares src package discovery."""
-    if not pyproject_path.is_file():
-        return False
-
-    try:
-        data = tomllib.loads(pyproject_path.read_text())
-    except (OSError, tomllib.TOMLDecodeError):
+    data = _load_pyproject(pyproject_path)
+    if data is None:
         return False
 
     tool = data.get("tool")
@@ -196,11 +190,129 @@ def _pyproject_uses_src_layout(pyproject_path: Path) -> bool:
     return False
 
 
+def _pyproject_declares_flat_layout(pyproject_path: Path) -> bool:
+    """Return True when pyproject explicitly points packaging at repo root."""
+    data = _load_pyproject(pyproject_path)
+    if data is None:
+        return False
+
+    tool = data.get("tool")
+    if not isinstance(tool, dict):
+        return False
+
+    setuptools = tool.get("setuptools")
+    if isinstance(setuptools, dict):
+        py_modules = setuptools.get("py-modules")
+        packages = setuptools.get("packages")
+        if _is_non_empty_string_list(py_modules) or _is_non_empty_string_list(packages):
+            return True
+        if isinstance(packages, dict):
+            find = packages.get("find")
+            if isinstance(find, dict) and _is_flat_layout_value(find.get("where")):
+                return True
+
+    hatch = tool.get("hatch")
+    if isinstance(hatch, dict):
+        build = hatch.get("build")
+        if isinstance(build, dict):
+            targets = build.get("targets")
+            if isinstance(targets, dict):
+                wheel = targets.get("wheel")
+                if isinstance(wheel, dict):
+                    packages = wheel.get("packages")
+                    only_include = wheel.get("only-include")
+                    if (
+                        _is_flat_package_value(packages)
+                        or _is_flat_package_value(only_include)
+                    ):
+                        return True
+
+    return False
+
+
+def _load_pyproject(pyproject_path: Path) -> dict[str, object] | None:
+    """Load pyproject TOML data, returning None when unavailable or invalid."""
+    if not pyproject_path.is_file():
+        return None
+
+    try:
+        data = tomllib.loads(pyproject_path.read_text())
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+
+    return data if isinstance(data, dict) else None
+
+
 def _is_src_layout_value(value: object) -> bool:
     """Return True for common pyproject spellings of a src layout."""
     if value == "src":
         return True
     return isinstance(value, list) and value == ["src"]
+
+
+def _is_flat_layout_value(value: object) -> bool:
+    """Return True for common pyproject spellings of repo-root discovery."""
+    if value == ".":
+        return True
+    return isinstance(value, list) and value == ["."]
+
+
+def _is_non_empty_string_list(value: object) -> bool:
+    """Return True when value is a non-empty list of strings."""
+    return (
+        isinstance(value, list)
+        and bool(value)
+        and all(isinstance(item, str) for item in value)
+    )
+
+
+def _is_flat_package_value(value: object) -> bool:
+    """Return True for hatch package lists that point outside src."""
+    if isinstance(value, str):
+        return not value.startswith("src/")
+    if isinstance(value, list) and value and all(isinstance(item, str) for item in value):
+        return any(not item.startswith("src/") for item in value)
+    return False
+
+
+_IGNORED_FLAT_SOURCE_DIRS = {
+    ".git",
+    ".github",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "dist",
+    "docs",
+    "htmlcov",
+    "node_modules",
+    "site",
+    "src",
+    "test",
+    "tests",
+    "venv",
+}
+
+
+def _has_flat_layout_python_sources(repo_path: Path) -> bool:
+    """Return True when Python sources live directly under the repo root."""
+    for child in repo_path.iterdir():
+        if child.is_file() and child.suffix == ".py":
+            return True
+        if (
+            child.is_dir()
+            and child.name not in _IGNORED_FLAT_SOURCE_DIRS
+            and not child.name.startswith(".")
+            and _contains_python_file(child)
+        ):
+            return True
+    return False
+
+
+def _contains_python_file(path: Path) -> bool:
+    """Return True when a directory contains any Python source file."""
+    return any(child.is_file() and child.suffix == ".py" for child in path.rglob("*.py"))
 
 
 def _python_typecheck_step(repo_path: Path) -> str:

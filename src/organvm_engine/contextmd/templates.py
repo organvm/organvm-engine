@@ -35,6 +35,10 @@ If `.conductor/active-handoff.md` exists, **READ IT FIRST** before doing any wor
 It contains constraints, locked files, conventions, and completed work from the
 originating agent. You MUST honor all constraints listed there.
 
+Handoff files should include metadata at the top:
+- `created_at`: UTC ISO-8601 timestamp
+- `expires_at`: UTC ISO-8601 timestamp, normally within 48h of creation
+
 If the handoff says "CROSS-VERIFICATION REQUIRED", your self-assessment will
 NOT be trusted. A different agent will verify your output against these constraints.
 <!-- ORGANVM:AUTO:END -->
@@ -234,6 +238,13 @@ ATOMS_NOT_RUN_HINT = """\
 ## Atomization Pipeline
 
 Run `organvm atoms pipeline --write && organvm atoms fanout --write` to generate task queue.
+"""
+
+HANDOFF_STATUS_SECTION = """\
+
+## Active Handoff Status
+
+{handoff_status}
 """
 
 AMMOI_SECTION = """\

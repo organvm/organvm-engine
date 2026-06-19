@@ -267,3 +267,29 @@ class TestSyncRepo:
         content = claude_md.read_text()
         assert "## Keep This" in content
         assert "## Old" not in content
+
+    def test_sync_flags_stale_handoff(self, tmp_path, registry):
+        from datetime import datetime, timedelta, timezone
+
+        repo_path = tmp_path / "recursive-engine"
+        repo_path.mkdir()
+        conductor = repo_path / ".conductor"
+        conductor.mkdir()
+        now = datetime.now(timezone.utc)
+        old = (now - timedelta(hours=72)).isoformat().replace("+00:00", "Z")
+        future = (now + timedelta(days=1)).isoformat().replace("+00:00", "Z")
+        (conductor / "active-handoff.md").write_text(
+            "---\n"
+            f"created_at: {old}\n"
+            f"expires_at: {future}\n"
+            "---\n"
+            "# Active handoff\n",
+        )
+
+        result = sync_repo(repo_path, "recursive-engine", "organvm-i-theoria", registry)
+
+        assert result["action"] == "created"
+        content = (repo_path / "CLAUDE.md").read_text()
+        assert "## Active Handoff Status" in content
+        assert "**STALE**" in content
+        assert "verify constraints" in content

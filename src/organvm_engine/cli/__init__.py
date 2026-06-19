@@ -34,6 +34,8 @@ Usage:
     organvm pitch sync [--organ X] [--dry-run] [--tier X]
     organvm context sync [--dry-run] [--organ X]
     organvm context surfaces [--workspace <path>] [--repo <name>] [--json]
+    organvm handoff list [--workspace <path>] [--json]
+    organvm handoff clean [--workspace <path>] [--older-than 7d] [--write]
     organvm prompts narrate [--agent claude|gemini|codex] [--project FILTER] [--output FILE] [--summary FILE] [--dry-run] [--gap-hours 24]
     organvm plans atomize [--plans-dir DIR] [--output FILE] [--summary FILE] [--dry-run]
     organvm atoms link [--threshold 0.25] [--by-thread] [--json] [--output FILE]
@@ -159,6 +161,7 @@ from organvm_engine.cli.governance import (
     cmd_governance_placement,
     cmd_governance_promote,
 )
+from organvm_engine.cli.handoff import cmd_handoff_clean, cmd_handoff_list
 from organvm_engine.cli.indexer import (
     cmd_index_bridge,
     cmd_index_scan,
@@ -1157,6 +1160,59 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Output JSON",
     )
+
+    # handoff
+    handoff = sub.add_parser(
+        "handoff",
+        help="Active handoff discovery and cleanup",
+    )
+    handoff.add_argument(
+        "--workspace",
+        default=None,
+        help="Workspace root directory",
+    )
+    handoff_sub = handoff.add_subparsers(dest="subcommand")
+    handoff_list = handoff_sub.add_parser(
+        "list",
+        help="List active handoff files across the workspace",
+    )
+    handoff_list.add_argument(
+        "--workspace",
+        default=argparse.SUPPRESS,
+        help="Workspace root directory",
+    )
+    handoff_list.add_argument(
+        "--stale-after",
+        default="48h",
+        help="Mark handoffs stale after this age (default: 48h)",
+    )
+    handoff_list.add_argument("--json", action="store_true", help="Output JSON")
+
+    handoff_clean = handoff_sub.add_parser(
+        "clean",
+        help="Remove expired handoffs, optionally also older handoffs",
+    )
+    handoff_clean.add_argument(
+        "--workspace",
+        default=argparse.SUPPRESS,
+        help="Workspace root directory",
+    )
+    handoff_clean.add_argument(
+        "--older-than",
+        default=None,
+        help="Also remove handoffs older than this duration, e.g. 7d",
+    )
+    handoff_clean.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview removals without deleting files (default)",
+    )
+    handoff_clean.add_argument(
+        "--write",
+        action="store_true",
+        help="Actually remove files (default is dry-run)",
+    )
+    handoff_clean.add_argument("--json", action="store_true", help="Output JSON")
 
     # organism
     org_cmd = sub.add_parser(
@@ -3313,6 +3369,8 @@ def main() -> int:
         ("pitch", "sync"): cmd_pitch_sync,
         ("context", "sync"): cmd_context_sync,
         ("context", "surfaces"): cmd_context_surfaces,
+        ("handoff", "list"): cmd_handoff_list,
+        ("handoff", "clean"): cmd_handoff_clean,
         ("omega", "status"): cmd_omega_status,
         ("omega", "check"): cmd_omega_check,
         ("omega", "update"): cmd_omega_update,

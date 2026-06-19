@@ -14,6 +14,7 @@ import yaml
 
 from organvm_engine.network import ENGAGEMENT_FORMS, MIRROR_LENSES, NETWORK_MAP_FILENAME
 from organvm_engine.network.discover import (
+    KINSHIP_COMMUNITIES,
     suggest_kinship_mirrors,
     suggest_parallel_mirrors,
 )
@@ -757,6 +758,91 @@ class TestDiscover:
         )
         projects = [s.project for s in suggestions]
         assert len(projects) == len(set(projects))
+
+
+# ─── Kinship community dataset integrity ──────────────────────────────────
+
+# The eight organ short-keys used in the kinship dataset's "organs" field.
+_ORGAN_KEYS = frozenset({"I", "II", "III", "IV", "V", "VI", "VII", "META"})
+
+# Platforms whose entries point at an external destination and so need a URL.
+_URL_REQUIRED_PLATFORMS = frozenset({"community", "forum", "wiki", "discord"})
+
+
+class TestKinshipDataset:
+    def test_no_duplicate_project_slugs(self):
+        """Every kinship community has a unique project slug (dedup invariant)."""
+        slugs = [c["project"] for c in KINSHIP_COMMUNITIES]
+        assert len(slugs) == len(set(slugs))
+
+    def test_no_duplicate_urls(self):
+        """Distinct communities point at distinct destinations."""
+        urls = [c["url"] for c in KINSHIP_COMMUNITIES if c.get("url")]
+        assert len(urls) == len(set(urls))
+
+    def test_required_fields_present(self):
+        """Each entry carries the fields downstream code reads."""
+        for c in KINSHIP_COMMUNITIES:
+            assert c.get("project"), c
+            assert c.get("platform"), c
+            assert c.get("relevance"), c
+            assert c.get("tags"), c
+            assert c.get("organs"), c
+
+    def test_organs_are_valid_keys(self):
+        """Every organ reference resolves to a known organ short-key."""
+        for c in KINSHIP_COMMUNITIES:
+            assert set(c["organs"]) <= _ORGAN_KEYS, c["project"]
+
+    def test_url_present_for_external_platforms(self):
+        """Web-facing communities carry a URL so engagement is actionable."""
+        for c in KINSHIP_COMMUNITIES:
+            if c["platform"] in _URL_REQUIRED_PLATFORMS:
+                assert c.get("url"), c["project"]
+
+    def test_every_organ_has_kinship_coverage(self):
+        """No organ is a kinship blind spot — each has multiple communities."""
+        counts = {k: 0 for k in _ORGAN_KEYS}
+        for c in KINSHIP_COMMUNITIES:
+            for organ in c["organs"]:
+                counts[organ] += 1
+        for organ, n in counts.items():
+            assert n >= 3, f"organ {organ} thin: {n} communities"
+
+
+class TestKinshipR3:
+    """R3 research round (LIMEN-070, issue #66) — community identification."""
+
+    # A sampling of the projects introduced in the third research round,
+    # spanning cross-organ commons and each organ's lens.
+    _R3_PROJECTS = frozenset({
+        "sustainoss", "permacomputing", "solid-project", "digital-gardeners",
+        "lesswrong", "principia-cybernetica", "metagov",
+        "openprocessing", "hydra-community", "nime",
+        "tinyseed", "open-startups",
+        "opentelemetry-community", "opengitops", "srecon",
+        "humanities-commons", "pubpub",
+        "exercism", "the-odin-project", "hack-club",
+        "matrix-community", "nostr-community",
+        "all-contributors", "software-freedom-conservancy",
+        "apache-software-foundation",
+    })
+
+    def test_r3_communities_present(self):
+        slugs = {c["project"] for c in KINSHIP_COMMUNITIES}
+        missing = self._R3_PROJECTS - slugs
+        assert not missing, f"missing R3 communities: {sorted(missing)}"
+
+    def test_r3_communities_are_suggestable(self):
+        """A tag introduced by R3 surfaces its community via discovery."""
+        suggestions = suggest_kinship_mirrors(["gitops"])
+        assert any(s.project == "opengitops" for s in suggestions)
+
+    def test_r3_decentralization_tag_matches(self):
+        """R3 broadened ORGAN-VII decentralization kinship."""
+        suggestions = suggest_kinship_mirrors(["decentralization"])
+        projects = {s.project for s in suggestions}
+        assert {"matrix-community", "nostr-community"} <= projects
 
 
 # ─── Synthesizer ────────────────────────────────────────────────────────

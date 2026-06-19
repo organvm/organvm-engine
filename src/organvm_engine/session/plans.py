@@ -342,7 +342,7 @@ def _project_filter_search_root(workspace: Path, project_filter: str | None) -> 
     raw = Path(project_filter).expanduser()
     if raw.is_absolute():
         candidates = [raw]
-    elif raw == Path("."):
+    elif raw == Path():
         candidates = [Path.cwd(), workspace / raw]
     else:
         candidates = [workspace / raw, Path.cwd() / raw]

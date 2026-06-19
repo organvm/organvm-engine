@@ -14,11 +14,18 @@ Heuristic extraction (best-effort, may need human review):
   - law: docstring references to governance rules, enforcement language
   - teleology: axiom mapping from naming conventions + purpose signals
   - axiom_alignment: best-effort from naming + docstrings
+
+Documentation-only artifacts (repos/directories with markdown but no Python)
+are analyzed as prose rather than source: headings become structure, the H1
+title becomes identity, normative/axiom language becomes law/teleology, and
+markdown links become relations. This keeps the seven dimensions populated for
+spec, SEED, and corpus repos that carry their governance in documents.
 """
 
 from __future__ import annotations
 
 import ast
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -329,6 +336,345 @@ def _infer_signals(stats: dict) -> tuple[list[str], list[str]]:
 
 
 # ---------------------------------------------------------------------------
+# Documentation analysis (documentation-only repos)
+# ---------------------------------------------------------------------------
+
+# Suffixes that mark an artifact as documentation rather than source code.
+_DOC_SUFFIXES = {".md", ".markdown", ".rst", ".txt"}
+
+# Directories pruned when classifying/scanning a candidate documentation tree.
+_SKIP_DIRS = {
+    ".git", "node_modules", ".venv", "venv", "__pycache__",
+    ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox", "dist", "build",
+}
+
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*$")
+_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+_AXIOM_REF_RE = re.compile(r"\bA[1-9]\b")
+
+# RFC-2119-style normative keywords — the "law" a document imposes.
+_NORMATIVE_WORDS = [
+    "must not", "must", "shall not", "shall", "required", "should not",
+    "should", "prohibited", "forbidden", "may not", "mandatory",
+]
+
+
+def _is_doc_file(path: Path) -> bool:
+    """True if a path is a documentation file by suffix."""
+    return path.suffix.lower() in _DOC_SUFFIXES
+
+
+def _walk_files(dir_path: Path):
+    """Yield files under dir_path, pruning vendored/hidden directories."""
+    for p in dir_path.rglob("*"):
+        if not p.is_file():
+            continue
+        rel_parts = p.relative_to(dir_path).parts
+        if any(part in _SKIP_DIRS for part in rel_parts):
+            continue
+        yield p
+
+
+def _is_doc_directory(dir_path: Path) -> bool:
+    """True if a directory contains documentation but no Python source.
+
+    Short-circuits to False on the first ``.py`` file found — a tree with any
+    Python is analyzed as source, not documentation.
+    """
+    has_doc = False
+    for p in _walk_files(dir_path):
+        if p.suffix == ".py":
+            return False
+        if _is_doc_file(p):
+            has_doc = True
+    return has_doc
+
+
+def _parse_markdown(text: str) -> tuple[list[tuple[int, str]], list[str], int]:
+    """Extract (headings, links, fenced-code-block count) from markdown text.
+
+    Headings inside fenced code blocks are ignored.
+    """
+    headings: list[tuple[int, str]] = []
+    code_blocks = 0
+    in_fence = False
+    for raw in text.splitlines():
+        stripped = raw.lstrip()
+        if stripped.startswith(("```", "~~~")):
+            if not in_fence:
+                code_blocks += 1
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        match = _HEADING_RE.match(raw.rstrip())
+        if match:
+            headings.append((len(match.group(1)), match.group(2).strip()))
+    links = _LINK_RE.findall(text)
+    return headings, links, code_blocks
+
+
+def _doc_title(text: str, headings: list[tuple[int, str]]) -> str:
+    """Best-effort document title: first H1, else first heading, else first line.
+
+    Skips a leading YAML frontmatter block when falling back to the first line.
+    """
+    for level, heading in headings:
+        if level == 1:
+            return heading
+    if headings:
+        return headings[0][1]
+
+    lines = text.splitlines()
+    start = 0
+    if lines and lines[0].strip() == "---":
+        for idx in range(1, len(lines)):
+            if lines[idx].strip() == "---":
+                start = idx + 1
+                break
+    for line in lines[start:]:
+        stripped = line.strip()
+        if stripped:
+            return stripped.lstrip("#").strip()
+    return ""
+
+
+def _doc_file_stats(path: Path) -> dict:
+    """Documentation-aware stats for a single markdown/doc file."""
+    if not path.exists():
+        return {"exists": False, "doc": True}
+    stat = path.stat()
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        text = ""
+    headings, links, code_blocks = _parse_markdown(text)
+    return {
+        "exists": True,
+        "doc": True,
+        "files": 1,
+        "lines": len(text.splitlines()),
+        "size_bytes": stat.st_size,
+        "last_modified": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+        "title": _doc_title(text, headings),
+        "headings": headings,
+        "heading_count": len(headings),
+        "links": links,
+        "code_blocks": code_blocks,
+        "scan_text": text,
+    }
+
+
+def _doc_dir_stats(dir_path: Path) -> dict:
+    """Aggregate documentation stats across a directory of doc files.
+
+    Prefers a README/index title for the directory's identity, then any H1.
+    """
+    if not dir_path.is_dir():
+        return {"exists": False, "doc": True}
+
+    doc_files = sorted(p for p in _walk_files(dir_path) if _is_doc_file(p))
+    if not doc_files:
+        return {"exists": True, "doc": True, "files": 0, "lines": 0}
+
+    total_lines = 0
+    all_headings: list[tuple[int, str]] = []
+    all_links: list[str] = []
+    code_blocks = 0
+    last_modified = ""
+    preferred_title = ""
+    scan_parts: list[str] = []
+
+    for doc in doc_files:
+        stats = _doc_file_stats(doc)
+        total_lines += stats.get("lines", 0)
+        all_headings.extend(stats.get("headings", []))
+        all_links.extend(stats.get("links", []))
+        code_blocks += stats.get("code_blocks", 0)
+        scan_parts.append(stats.get("scan_text", ""))
+        modified = stats.get("last_modified", "")
+        if modified > last_modified:
+            last_modified = modified
+        if not preferred_title and doc.stem.lower() in {"readme", "index"}:
+            preferred_title = stats.get("title", "")
+
+    title = preferred_title
+    if not title:
+        title = next((h for level, h in all_headings if level == 1), "")
+    if not title and all_headings:
+        title = all_headings[0][1]
+
+    return {
+        "exists": True,
+        "doc": True,
+        "files": len(doc_files),
+        "lines": total_lines,
+        "last_modified": last_modified,
+        "title": title,
+        "headings": all_headings,
+        "heading_count": len(all_headings),
+        "links": all_links,
+        "code_blocks": code_blocks,
+        "scan_text": "\n".join(scan_parts),
+    }
+
+
+def _normative_terms(text: str) -> list[str]:
+    """Return RFC-2119 normative keywords present in text (word-boundary match)."""
+    low = text.lower()
+    found = []
+    for word in _NORMATIVE_WORDS:
+        if re.search(rf"\b{re.escape(word)}\b", low):
+            found.append(word)
+    return found
+
+
+def _doc_axioms(text: str) -> list[str]:
+    """Axioms a document touches: keyword signals plus explicit A1–A9 references."""
+    low = text.lower()
+    matches = {ax for ax, signals in _AXIOM_SIGNALS.items() if any(s in low for s in signals)}
+    matches.update(_AXIOM_REF_RE.findall(text))
+    return sorted(matches)
+
+
+def _extract_doc_existence(stats: dict) -> dict:
+    """DIAG-001 adapted for documentation: does this prose physically exist?"""
+    if not stats.get("exists") or not stats.get("files"):
+        return {"score": 0.0, "evidence": "documentation not found"}
+    parts = [f"{stats['files']} doc file{'s' if stats['files'] != 1 else ''}"]
+    if "lines" in stats:
+        parts.append(f"{stats['lines']} lines")
+    if stats.get("heading_count"):
+        parts.append(f"{stats['heading_count']} headings")
+    if stats.get("last_modified"):
+        parts.append(f"modified {stats['last_modified']}")
+    return {"score": 1.0, "evidence": ", ".join(parts)}
+
+
+def _extract_doc_identity(stats: dict) -> str:
+    """DIAG-002 adapted: the document title is its semantic identity."""
+    title = stats.get("title", "")
+    if title:
+        return title.rstrip(".")
+    return "Documentation artifact (no title or headings found)"
+
+
+def _extract_doc_structure(stats: dict) -> str:
+    """DIAG-003 adapted: sections and code examples as internal organization."""
+    headings = stats.get("headings", [])
+    parts = []
+    if stats.get("files"):
+        parts.append(f"{stats['files']} documents")
+    if headings:
+        top = [h for level, h in headings if level <= 2][:5]
+        section_part = f"{len(headings)} sections"
+        if top:
+            section_part += f" ({', '.join(top)})"
+        parts.append(section_part)
+    if stats.get("code_blocks"):
+        parts.append(f"{stats['code_blocks']} code blocks")
+    return "; ".join(parts) if parts else "No document structure detected"
+
+
+def _extract_doc_law(stats: dict) -> str:
+    """DIAG-004 adapted: normative language and axiom references as imposed law."""
+    text = stats.get("scan_text", "")
+    signals = []
+    normative = _normative_terms(text)
+    if normative:
+        signals.append(f"normative language: {', '.join(normative[:5])}")
+    axioms = _AXIOM_REF_RE.findall(text)
+    if axioms:
+        signals.append(f"axiom references: {', '.join(sorted(set(axioms)))}")
+    low = text.lower()
+    gov_terms = [t for t in ("governance", "policy", "sanction", "promotion", "audit") if t in low]
+    if gov_terms:
+        signals.append(f"governance terms: {', '.join(gov_terms)}")
+    return "; ".join(signals) if signals else "No normative or governance language detected"
+
+
+def _extract_doc_process(stats: dict) -> str:
+    """DIAG-005 adapted: documented procedures and runnable examples."""
+    blocks = stats.get("code_blocks", 0)
+    if blocks:
+        return f"Documents {blocks} code/command example{'s' if blocks != 1 else ''}"
+    procedural_words = ("usage", "install", "setup", "run", "command", "workflow", "step", "how to")
+    procedural = [
+        h for _level, h in stats.get("headings", [])
+        if any(w in h.lower() for w in procedural_words)
+    ]
+    if procedural:
+        return f"Procedural sections: {', '.join(procedural[:5])}"
+    return "No procedural or executable content detected"
+
+
+def _extract_doc_relation(stats: dict) -> str:
+    """DIAG-006 adapted: markdown links as the document's connections."""
+    links = stats.get("links", [])
+    internal = sorted({
+        link for link in links
+        if not link.startswith(("http://", "https://", "mailto:", "#"))
+    })
+    if internal:
+        names = sorted({Path(link).name or link for link in internal})
+        return f"references: {', '.join(names[:10])}"
+    external = [link for link in links if link.startswith(("http://", "https://"))]
+    if external:
+        return f"{len(external)} external link{'s' if len(external) != 1 else ''}"
+    return "No document references detected"
+
+
+def _extract_doc_teleology(stats: dict) -> str:
+    """DIAG-007 adapted: which axiom does this documentation serve?"""
+    axioms = _doc_axioms(stats.get("scan_text", ""))
+    if axioms:
+        return f"Serves {', '.join(axioms)}"
+    return "No axiom alignment detected from documentation"
+
+
+def _extract_doc_axiom_claims(stats: dict) -> list[AxiomClaim]:
+    """Best-effort axiom alignment from documentation prose."""
+    text = stats.get("scan_text", "")
+    low = text.lower()
+    claims = []
+    for axiom, signals in _AXIOM_SIGNALS.items():
+        matching = [s for s in signals if s in low]
+        if matching:
+            claims.append(
+                AxiomClaim(
+                    axiom=axiom,
+                    claim=f"Documentation references: {', '.join(matching)}",
+                    evidence="Found in documentation prose",
+                ),
+            )
+    claimed = {c.axiom for c in claims}
+    for axiom in sorted(set(_AXIOM_REF_RE.findall(text))):
+        if axiom not in claimed:
+            claims.append(
+                AxiomClaim(
+                    axiom=axiom,
+                    claim="Explicit axiom reference in documentation",
+                    evidence="Direct A-number mention",
+                ),
+            )
+    return claims
+
+
+def _infer_doc_signals(stats: dict) -> tuple[list[str], list[str]]:
+    """Infer signal types a documentation artifact produces.
+
+    Documentation is treated as a producer of KNOWLEDGE (and any other signal
+    types its prose describes); it consumes nothing on its own.
+    """
+    text = stats.get("scan_text", "").lower()
+    produces = {"KNOWLEDGE"}
+    for signal_type, patterns in _SIGNAL_TYPE_PATTERNS.items():
+        if any(p in text for p in patterns):
+            produces.add(signal_type)
+    return [], sorted(produces)
+
+
+# ---------------------------------------------------------------------------
 # Testimony generation
 # ---------------------------------------------------------------------------
 
@@ -362,14 +708,21 @@ def generate_testimony(
     else:
         fs_path = workspace_root / supply_entry.repo / module_path
 
-    # Analyze the artifact
+    # Analyze the artifact. Documentation-only trees (markdown, no Python) are
+    # read as prose; everything else is analyzed as Python source via AST.
     if fs_path.is_dir():
-        stats = _dir_stats(fs_path)
+        if _is_doc_directory(fs_path):
+            stats = _doc_dir_stats(fs_path)
+        else:
+            stats = _dir_stats(fs_path)
     elif fs_path.exists():
-        stats = _file_stats(fs_path)
-        ast_info = _ast_summary(fs_path)
-        stats.update(ast_info)
-        stats["docstring"] = _extract_docstring(fs_path)
+        if _is_doc_file(fs_path):
+            stats = _doc_file_stats(fs_path)
+        else:
+            stats = _file_stats(fs_path)
+            ast_info = _ast_summary(fs_path)
+            stats.update(ast_info)
+            stats["docstring"] = _extract_docstring(fs_path)
     else:
         stats = {"exists": False}
 
@@ -384,7 +737,27 @@ def generate_testimony(
         for gid in demand.gate_ids:
             feeds_gates.append(f"{demand.gate_name}/{gid}")
 
-    # Infer signals
+    # Infer signals and dimensions — documentation artifacts use prose-aware
+    # extractors so the seven dimensions stay populated for doc-only repos.
+    if stats.get("doc"):
+        consumes, produces = _infer_doc_signals(stats)
+        return Testimony(
+            v1_path=f"{supply_entry.repo}/{module_path}",
+            v2_mechanism=mechanism,
+            v2_verb=verb,
+            feeds_gates=sorted(set(feeds_gates)),
+            existence=_extract_doc_existence(stats),
+            identity=_extract_doc_identity(stats),
+            structure=_extract_doc_structure(stats),
+            law=_extract_doc_law(stats),
+            process=_extract_doc_process(stats),
+            relation=_extract_doc_relation(stats),
+            teleology=_extract_doc_teleology(stats),
+            signals_consumes=consumes,
+            signals_produces=produces,
+            axiom_alignment=_extract_doc_axiom_claims(stats),
+        )
+
     consumes, produces = _infer_signals(stats)
 
     return Testimony(

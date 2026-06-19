@@ -103,6 +103,30 @@ def test_review_by_session_id(tmp_path, capsys):
         assert "Export:" in captured.out
 
 
+def test_review_checks_uncommitted_only_for_session_project(tmp_path, capsys):
+    jsonl = _make_test_session(tmp_path)
+    calls = []
+
+    def fake_check_uncommitted(**kwargs):
+        calls.append(kwargs)
+        return []
+
+    with (
+        patch("organvm_engine.cli.session.find_session", return_value=jsonl),
+        patch("organvm_engine.cli.session.discover_plans", return_value=[]),
+        patch(
+            "organvm_engine.git.status.check_uncommitted_files",
+            side_effect=fake_check_uncommitted,
+        ),
+    ):
+        args = _FakeArgs(session_id="test-abc")
+        result = cmd_session_review(args)
+        assert result == 0
+
+    capsys.readouterr()
+    assert calls == [{"project_path": "/Users/test/Workspace/project", "timeout": 5}]
+
+
 def test_review_latest(tmp_path, capsys):
     jsonl = _make_test_session(tmp_path)
 

@@ -284,6 +284,7 @@ from organvm_engine.cli.sop import (
     cmd_sop_discover,
     cmd_sop_init,
     cmd_sop_resolve,
+    cmd_sop_staleness,
 )
 from organvm_engine.cli.status import cmd_status
 from organvm_engine.cli.study import (
@@ -1920,6 +1921,27 @@ def build_parser() -> argparse.ArgumentParser:
         "--strict",
         action="store_true",
         help="Exit 1 on any untracked or missing SOPs",
+    )
+    sop_check.add_argument(
+        "--staleness",
+        action="store_true",
+        help="Also check declared governed code paths for stale SOPs",
+    )
+
+    sop_staleness = sop_sub.add_parser(
+        "staleness",
+        help="Cross-reference SOP review dates against governed code",
+    )
+    sop_staleness.add_argument("--json", action="store_true", help="Output JSON")
+    sop_staleness.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit 1 when stale, missing, or unknown governed paths are found",
+    )
+    sop_staleness.add_argument(
+        "--include-unmapped",
+        action="store_true",
+        help="Show SOPs that do not declare governed paths",
     )
 
     sop_resolve = sop_sub.add_parser(
@@ -3588,6 +3610,7 @@ def main() -> int:
             "check": cmd_sop_check,
             "resolve": cmd_sop_resolve,
             "init": cmd_sop_init,
+            "staleness": cmd_sop_staleness,
         }
         handler = sop_dispatch.get(getattr(args, "subcommand", "") or "")
         if handler:

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import subprocess
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -54,6 +56,8 @@ class SOPEntry:
     overrides: str | None = None
     complements: list[str] = field(default_factory=list)
     sop_name: str | None = None  # from frontmatter 'name' or derived from filename
+    governed_paths: list[str] = field(default_factory=list)
+    last_reviewed: str | None = None
 
 
 def _parse_frontmatter(path: Path) -> dict:
@@ -90,6 +94,57 @@ def _derive_sop_name(filename: str) -> str:
     stem = Path(filename).stem
     # Strip SOP--, sop--, METADOC--, etc. prefixes
     return re.sub(r"^(SOP--|sop--|sop-|METADOC--|metadoc--|APPENDIX--|appendix--)", "", stem)
+
+
+def _coerce_str_list(value: object) -> list[str]:
+    """Normalize frontmatter values that can be strings, lists, or path dicts."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, dict):
+        paths: list[str] = []
+        for key in ("path", "paths", "file", "files", "code", "modules"):
+            paths.extend(_coerce_str_list(value.get(key)))
+        return paths
+    if isinstance(value, list):
+        paths: list[str] = []
+        for item in value:
+            paths.extend(_coerce_str_list(item))
+        return paths
+    return []
+
+
+def _extract_governed_paths(frontmatter: dict) -> list[str]:
+    """Extract governed code paths from supported SOP frontmatter shapes."""
+    paths: list[str] = []
+    for key in ("governed_paths", "governed_code", "code_paths", "source_paths"):
+        paths.extend(_coerce_str_list(frontmatter.get(key)))
+
+    governs = frontmatter.get("governs")
+    if isinstance(governs, dict):
+        for key in ("code", "paths", "modules", "files"):
+            paths.extend(_coerce_str_list(governs.get(key)))
+    else:
+        paths.extend(_coerce_str_list(governs))
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for path in paths:
+        normalized = path.strip()
+        if normalized and normalized not in seen:
+            deduped.append(normalized)
+            seen.add(normalized)
+    return deduped
+
+
+def _extract_last_reviewed(frontmatter: dict) -> str | None:
+    """Return the first review/validation timestamp declared by the SOP."""
+    for key in ("last_reviewed", "reviewed_at", "last_validated", "validated_at"):
+        value = frontmatter.get(key)
+        if value:
+            return str(value)
+    return None
 
 
 def _infer_scope(path: Path, workspace: Path) -> str:
@@ -217,6 +272,11 @@ def discover_sops(
 
     entries: list[SOPEntry] = []
 
+    if organ is None and _is_local_repo_root(ws):
+        org_name, repo_name = _infer_local_repo_identity(ws)
+        _scan_repo(ws, org_name, repo_name, ws, entries)
+        _scan_sops_dir(ws, org_name, repo_name, ws / ".sops", entries)
+
     for org_name in scan_dirs:
         org_dir = ws / org_name
         if not org_dir.is_dir():
@@ -324,6 +384,8 @@ def _build_entry(
         overrides=fm.get("overrides"),
         complements=fm.get("complements") or [],
         sop_name=sop_name,
+        governed_paths=_extract_governed_paths(fm),
+        last_reviewed=_extract_last_reviewed(fm),
     )
 
 
@@ -347,3 +409,56 @@ def _walk_safe(root: Path) -> list[Path]:
     except PermissionError:
         pass
     return results
+
+
+def _is_local_repo_root(path: Path) -> bool:
+    """True when *path* itself looks like a repo containing local SOPs."""
+    if not (path / ".sops").is_dir():
+        return False
+    return any((path / marker).exists() for marker in (".git", "pyproject.toml", "package.json"))
+
+
+def _infer_local_repo_identity(path: Path) -> tuple[str, str]:
+    """Infer org/repo labels for a standalone repo scan."""
+    remote = _git_remote_identity(path)
+    if remote is not None:
+        return remote
+
+    repo_name = _pyproject_name(path) or path.name
+    org_name = path.parent.name or "local"
+    return org_name, repo_name
+
+
+def _git_remote_identity(path: Path) -> tuple[str, str] | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(path), "config", "--get", "remote.origin.url"],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+
+    remote = result.stdout.strip()
+    if not remote:
+        return None
+    match = re.search(r"[:/]([^/:]+)/([^/]+?)(?:\.git)?$", remote)
+    if not match:
+        return None
+    return match.group(1), match.group(2)
+
+
+def _pyproject_name(path: Path) -> str | None:
+    pyproject = path / "pyproject.toml"
+    if not pyproject.is_file():
+        return None
+    try:
+        with pyproject.open("rb") as f:
+            data = tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    name = data.get("project", {}).get("name")
+    return name if isinstance(name, str) and name else None

@@ -112,6 +112,19 @@ class TestDispatchTable:
             args = parser.parse_args(["seed"] + sub.split())
             assert args.command == "seed"
 
+    def test_all_sop_subcommands_parse(self):
+        parser = build_parser()
+        for sub in [
+            "discover",
+            "audit",
+            "check --staleness --strict",
+            "staleness --strict",
+            "resolve cli-module-pattern",
+            "init --name local-pattern",
+        ]:
+            args = parser.parse_args(["sop"] + sub.split())
+            assert args.command == "sop"
+
     def test_all_git_subcommands_parse(self):
         parser = build_parser()
         for sub in [

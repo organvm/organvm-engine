@@ -3,6 +3,10 @@ sop: true
 name: cli-module-pattern
 scope: repo
 phase: any
+last_reviewed: 2026-06-19
+governed_paths:
+  - src/organvm_engine/cli/
+  - tests/test_cli.py
 triggers:
   - context:new-cli-command
 complements: []

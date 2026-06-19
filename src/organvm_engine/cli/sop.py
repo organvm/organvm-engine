@@ -8,11 +8,22 @@ import sys
 from pathlib import Path
 
 
-def cmd_sop_discover(args: argparse.Namespace) -> int:
+def _resolve_sop_workspace(args: argparse.Namespace) -> Path | None:
+    """Prefer the current repo when it has local .sops and no workspace was passed."""
     from organvm_engine.paths import resolve_workspace as _resolve_workspace
+
+    if getattr(args, "workspace", None):
+        return _resolve_workspace(args)
+    cwd = Path.cwd()
+    if (cwd / ".sops").is_dir():
+        return cwd.resolve()
+    return _resolve_workspace(args)
+
+
+def cmd_sop_discover(args: argparse.Namespace) -> int:
     from organvm_engine.sop.discover import discover_sops
 
-    workspace = _resolve_workspace(args)
+    workspace = _resolve_sop_workspace(args)
     organ = getattr(args, "organ", None)
     as_json = getattr(args, "json", False)
 
@@ -35,6 +46,8 @@ def cmd_sop_discover(args: argparse.Namespace) -> int:
                 "overrides": e.overrides,
                 "complements": e.complements,
                 "sop_name": e.sop_name,
+                "governed_paths": e.governed_paths,
+                "last_reviewed": e.last_reviewed,
             }
             for e in entries
         ]
@@ -60,15 +73,16 @@ def cmd_sop_discover(args: argparse.Namespace) -> int:
 
 
 def cmd_sop_audit(args: argparse.Namespace) -> int:
-    from organvm_engine.paths import resolve_workspace as _resolve_workspace
     from organvm_engine.sop.discover import discover_sops
     from organvm_engine.sop.inventory import audit_sops
+    from organvm_engine.sop.staleness import audit_sop_staleness
 
-    workspace = _resolve_workspace(args)
+    workspace = _resolve_sop_workspace(args)
     organ = getattr(args, "organ", None)
 
     entries = discover_sops(workspace=workspace, organ=organ)
     result = audit_sops(entries)
+    stale_report = audit_sop_staleness(entries, workspace=workspace)
 
     print("SOP Ecosystem Audit")
     print(f"{'=' * 60}")
@@ -93,6 +107,8 @@ def cmd_sop_audit(args: argparse.Namespace) -> int:
         for name in result.missing:
             print(f"  {name}")
 
+    _print_staleness_summary(stale_report)
+
     if not result.untracked and not result.missing:
         print("\nAll SOPs accounted for.")
 
@@ -104,12 +120,12 @@ def cmd_sop_audit(args: argparse.Namespace) -> int:
 
 
 def cmd_sop_check(args: argparse.Namespace) -> int:
-    from organvm_engine.paths import resolve_workspace as _resolve_workspace
     from organvm_engine.sop.discover import discover_sops
     from organvm_engine.sop.inventory import audit_sops
 
-    workspace = _resolve_workspace(args)
+    workspace = _resolve_sop_workspace(args)
     strict = getattr(args, "strict", False)
+    check_staleness = getattr(args, "staleness", False)
 
     entries = discover_sops(workspace=workspace)
     result = audit_sops(entries)
@@ -128,6 +144,19 @@ def cmd_sop_check(args: argparse.Namespace) -> int:
         if strict:
             return 1
 
+    if check_staleness:
+        from organvm_engine.sop.staleness import audit_sop_staleness
+
+        stale_report = audit_sop_staleness(entries, workspace=workspace)
+        for check in stale_report.stale + stale_report.missing + stale_report.unknown:
+            print(
+                f"WARNING: {check.sop.filename} {check.status}: {check.declared_path} "
+                f"({check.reason})",
+                file=sys.stderr,
+            )
+        if strict and not stale_report.passed:
+            return 1
+
     if not result.untracked and not result.missing:
         total = len(result.tracked) + len(result.reference_copy)
         print(f"OK: {total} SOPs accounted for, 0 untracked, 0 missing")
@@ -135,13 +164,39 @@ def cmd_sop_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sop_staleness(args: argparse.Namespace) -> int:
+    from organvm_engine.sop.discover import discover_sops
+    from organvm_engine.sop.staleness import audit_sop_staleness
+
+    workspace = _resolve_sop_workspace(args)
+    organ = getattr(args, "organ", None)
+    as_json = getattr(args, "json", False)
+    strict = getattr(args, "strict", False)
+    include_unmapped = getattr(args, "include_unmapped", False)
+
+    entries = discover_sops(workspace=workspace, organ=organ)
+    report = audit_sop_staleness(entries, workspace=workspace)
+
+    if as_json:
+        print(json.dumps(report.to_dict(), indent=2))
+        return 0 if report.passed or not strict else 1
+
+    print("SOP Staleness")
+    print("=" * 60)
+    _print_staleness_summary(report, include_unmapped=include_unmapped)
+
+    if not report.checks:
+        print("\nNo SOPs declare governed code paths.")
+
+    return 0 if report.passed or not strict else 1
+
+
 def cmd_sop_resolve(args: argparse.Namespace) -> int:
     from organvm_engine.organ_config import ORGANS
-    from organvm_engine.paths import resolve_workspace as _resolve_workspace
     from organvm_engine.sop.discover import discover_sops
     from organvm_engine.sop.resolver import resolve_all, resolve_sop
 
-    workspace = _resolve_workspace(args)
+    workspace = _resolve_sop_workspace(args)
     organ_key = getattr(args, "organ", None)
     repo = getattr(args, "repo", None)
     name = getattr(args, "name", None)
@@ -225,3 +280,26 @@ def cmd_sop_init(args: argparse.Namespace) -> int:
     if scope == "organ":
         print("  3. Ensure the superproject .gitignore includes '!.sops/' and '!.sops/**'")
     return 0
+
+
+def _print_staleness_summary(report, include_unmapped: bool = False) -> None:
+    if not report.checks and not include_unmapped:
+        return
+
+    print("\nStaleness:")
+    if report.stale:
+        print(f"  STALE ({len(report.stale)}):")
+        for check in report.stale:
+            print(f"    {check.sop.filename:<40} {check.declared_path} - {check.reason}")
+    if report.missing:
+        print(f"  MISSING ({len(report.missing)}):")
+        for check in report.missing:
+            print(f"    {check.sop.filename:<40} {check.declared_path} - {check.reason}")
+    if report.unknown:
+        print(f"  UNKNOWN ({len(report.unknown)}):")
+        for check in report.unknown:
+            print(f"    {check.sop.filename:<40} {check.declared_path} - {check.reason}")
+    if report.fresh:
+        print(f"  Fresh: {len(report.fresh)} governed path(s)")
+    if include_unmapped and report.unmapped:
+        print(f"  Unmapped: {len(report.unmapped)} SOP(s) without governed paths")

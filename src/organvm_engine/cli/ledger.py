@@ -267,3 +267,167 @@ def cmd_ledger_repair(args: argparse.Namespace) -> int:
     print()
 
     return 0 if post.valid else 1
+
+def cmd_ledger_anchor(args: argparse.Namespace) -> int:
+    """Submit a Merkle checkpoint anchor to an external chain."""
+    import os
+
+    from web3 import Web3
+
+    from organvm_engine.events.spine import EventSpine
+    from organvm_engine.ledger.anchor import compute_anchor_hash
+
+    path = _chain_path(args)
+    spine = EventSpine(path)
+
+    rpc_url = getattr(args, "rpc_url", None) or os.environ.get("BASE_RPC_URL")
+    contract_addr = getattr(args, "contract", None) or os.environ.get("TESTAMENT_REGISTRY_ADDR")
+    private_key = getattr(args, "private_key", None) or os.environ.get("ANCHOR_PRIVATE_KEY")
+
+    if not all([rpc_url, contract_addr, private_key]):
+        print("  Error: Missing connection parameters. Provide --rpc-url, --contract, and --private-key")
+        print("         or set BASE_RPC_URL, TESTAMENT_REGISTRY_ADDR, and ANCHOR_PRIVATE_KEY env vars.")
+        return 1
+
+    dry_run = not getattr(args, "write", False)
+
+    # Find the latest checkpoint
+    all_events = spine.query(limit=100_000)
+    checkpoint_ev = None
+    for ev in reversed(all_events):
+        if ev.event_type == "testament.checkpoint":
+            checkpoint_ev = ev
+            break
+
+    if not checkpoint_ev:
+        print("  No checkpoints found to anchor.")
+        return 1
+
+    payload = checkpoint_ev.payload
+    merkle_root = payload.get("merkle_root")
+    if not merkle_root:
+        print("  Error: Checkpoint is missing merkle_root in payload.")
+        return 1
+    seq_range = payload.get("event_range", [0, 0])
+    event_count = payload.get("event_count", 0)
+
+    # We need the chain tip hash which is the hash of the last event in the checkpoint
+    # Or for simplicity, use the checkpoint's own hash or the previous event's hash.
+    # The requirement says: "The hash of the last event in the anchored range."
+    chain_tip_hash = ""
+    for ev in reversed(all_events):
+        if ev.sequence == seq_range[1] and ev.hash is not None:
+            chain_tip_hash = ev.hash
+            break
+
+    if not chain_tip_hash:
+        print("  Could not find chain tip hash for checkpoint range.")
+        return 1
+
+    import datetime
+    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    anchor_hash = compute_anchor_hash(
+        merkle_root=str(merkle_root),
+        chain_tip_hash=chain_tip_hash,
+        sequence_start=int(seq_range[0]),
+        sequence_end=int(seq_range[1]),
+        event_count=int(event_count),
+        timestamp=timestamp,
+    )
+
+    if dry_run:
+        print(f"\n  [dry-run] Would anchor checkpoint (seq {seq_range[0]}-{seq_range[1]})")
+        print(f"  Merkle root:    {merkle_root}")
+        print(f"  Chain tip hash: {chain_tip_hash}")
+        print(f"  Anchor hash:    {anchor_hash}")
+        print("\n  Run with --write to submit to chain.\n")
+        return 0
+
+    try:
+        w3 = Web3(Web3.HTTPProvider(rpc_url))
+        if not w3.is_connected():
+            print("  Error: Could not connect to RPC node.")
+            return 1
+
+        account = w3.eth.account.from_key(private_key)
+
+        # Simplified ABI for the registerAnchor function
+        abi = [{
+            "inputs": [
+                {"internalType": "bytes32", "name": "merkleRoot", "type": "bytes32"},
+                {"internalType": "bytes32", "name": "chainTipHash", "type": "bytes32"},
+                {"internalType": "uint256", "name": "sequenceStart", "type": "uint256"},
+                {"internalType": "uint256", "name": "sequenceEnd", "type": "uint256"},
+                {"internalType": "uint256", "name": "eventCount", "type": "uint256"},
+                {"internalType": "uint256", "name": "timestamp", "type": "uint256"},
+                {"internalType": "bytes32", "name": "anchorHash", "type": "bytes32"},
+            ],
+            "name": "registerAnchor",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function",
+        }]
+
+        contract = w3.eth.contract(address=w3.to_checksum_address(str(contract_addr)), abi=abi)
+
+        # Convert hex strings to bytes32 where needed
+        # We assume hashes are strings starting with "sha256:" and 64 hex chars,
+        # but Solidity bytes32 requires 32 bytes (64 hex chars).
+        def to_bytes32(h: str) -> bytes:
+            if h.startswith("sha256:"):
+                h = h[7:]
+            return bytes.fromhex(h)
+
+        # Parse timestamp into a unix epoch uint256
+        dt = datetime.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+        ts_uint = int(dt.timestamp())
+
+        # Build EIP-1559 transaction
+        base_fee = w3.eth.get_block('latest').get('baseFeePerGas', 0)
+        max_priority_fee = w3.eth.max_priority_fee
+
+        if base_fee is None:
+            base_fee = 0
+
+        max_fee_per_gas = base_fee * 2 + max_priority_fee
+
+        from typing import cast
+
+        from web3.types import TxParams
+
+        tx_params = cast(TxParams, {
+            'from': account.address,
+            'nonce': w3.eth.get_transaction_count(account.address),
+            'gas': 2000000,
+            'maxFeePerGas': max_fee_per_gas,
+            'maxPriorityFeePerGas': max_priority_fee,
+        })
+
+        tx = contract.functions.registerAnchor(
+            to_bytes32(str(merkle_root)),
+            to_bytes32(chain_tip_hash),
+            int(seq_range[0]),
+            int(seq_range[1]),
+            int(event_count),
+            ts_uint,
+            to_bytes32(anchor_hash),
+        ).build_transaction(tx_params)
+
+        signed_tx = account.sign_transaction(tx)
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+
+        if receipt.get("status") == 1:
+            print("\n  Anchor submitted successfully!")
+            print(f"  Transaction hash: {tx_hash.hex()}")
+            print(f"  Anchor hash:      {anchor_hash}")
+            return 0
+        print("\n  Anchor submission failed! Transaction reverted.")
+        return 1
+
+    except Exception as e:
+        print(f"\n  Error during anchoring: {e}")
+        return 1
+

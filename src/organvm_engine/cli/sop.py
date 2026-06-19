@@ -66,9 +66,30 @@ def cmd_sop_audit(args: argparse.Namespace) -> int:
 
     workspace = _resolve_workspace(args)
     organ = getattr(args, "organ", None)
+    as_json = getattr(args, "json", False)
+    check_stale = getattr(args, "stale", False)
 
     entries = discover_sops(workspace=workspace, organ=organ)
     result = audit_sops(entries)
+
+    staleness_results = []
+    if check_stale:
+        from organvm_engine.sop.staleness import (
+            audit_sop_staleness,
+            load_sop_code_mappings,
+        )
+
+        mapping_path = getattr(args, "mapping", None)
+        mappings = load_sop_code_mappings(workspace=workspace, mapping_path=mapping_path)
+        staleness_results = audit_sop_staleness(entries, mappings)
+
+    if as_json:
+        data = {
+            "inventory": _audit_result_to_dict(result),
+            "staleness": [r.to_dict() for r in staleness_results],
+        }
+        print(json.dumps(data, indent=2))
+        return 0
 
     print("SOP Ecosystem Audit")
     print(f"{'=' * 60}")
@@ -100,7 +121,71 @@ def cmd_sop_audit(args: argparse.Namespace) -> int:
     print(f"\nSummary: {total} discovered, {len(result.tracked)} tracked, "
           f"{len(result.reference_copy)} ref-copies, "
           f"{len(result.untracked)} untracked, {len(result.missing)} missing")
+
+    if check_stale:
+        include_fresh = getattr(args, "include_fresh", False)
+        _print_staleness_results(staleness_results, include_fresh=include_fresh)
     return 0
+
+
+def _audit_result_to_dict(result) -> dict:
+    return {
+        "tracked": [_sop_entry_to_dict(e) for e in result.tracked],
+        "reference_copy": [_sop_entry_to_dict(e) for e in result.reference_copy],
+        "untracked": [_sop_entry_to_dict(e) for e in result.untracked],
+        "missing": list(result.missing),
+        "summary": {
+            "discovered": len(result.tracked) + len(result.reference_copy) + len(result.untracked),
+            "tracked": len(result.tracked),
+            "reference_copy": len(result.reference_copy),
+            "untracked": len(result.untracked),
+            "missing": len(result.missing),
+        },
+    }
+
+
+def _sop_entry_to_dict(entry) -> dict:
+    return {
+        "path": str(entry.path),
+        "org": entry.org,
+        "repo": entry.repo,
+        "filename": entry.filename,
+        "title": entry.title,
+        "doc_type": entry.doc_type,
+        "canonical": entry.canonical,
+        "has_canonical_header": entry.has_canonical_header,
+        "scope": entry.scope,
+        "phase": entry.phase,
+        "sop_name": entry.sop_name,
+    }
+
+
+def _print_staleness_results(results: list, *, include_fresh: bool) -> None:
+    from organvm_engine.sop.staleness import stale_results
+
+    visible = results if include_fresh else stale_results(results)
+    print("\nSOP Staleness")
+    print("-" * 60)
+    if not results:
+        print("No SOP governance mappings found.")
+        return
+    if not visible:
+        print(f"All {len(results)} mapped SOP(s) are fresh.")
+        return
+
+    print(f"{'Status':<12} {'SOP':<34} {'Newest governed code'}")
+    print("-" * 90)
+    for result in visible:
+        newest = str(result.newest_code_path) if result.newest_code_path else "-"
+        print(f"{result.status:<12} {result.mapping.sop_name:<34} {newest}")
+
+    stale_count = sum(1 for result in results if result.status == "stale")
+    missing_sop_count = sum(1 for result in results if result.status == "missing-sop")
+    missing_code_count = sum(1 for result in results if result.status == "missing-code")
+    print(
+        f"\nStaleness summary: {len(results)} mapped, {stale_count} stale, "
+        f"{missing_sop_count} missing SOP, {missing_code_count} missing code",
+    )
 
 
 def cmd_sop_check(args: argparse.Namespace) -> int:

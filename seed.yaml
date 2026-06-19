@@ -282,3 +282,14 @@ signal_outputs:
   - name: atom-pipeline
     class: data
     description: "Emits atomized tasks, prompt narratives, and cross-linked artifacts"
+
+sop_governance:
+  - sop: cli-module-pattern
+    paths:
+      - src/organvm_engine/cli/
+      - tests/test_cli.py
+  - sop: prompting-standards
+    paths:
+      - src/organvm_engine/prompting/
+      - src/organvm_engine/contextmd/generator.py
+      - tests/test_prompting_standards.py

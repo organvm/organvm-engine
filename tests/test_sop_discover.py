@@ -168,6 +168,33 @@ class TestDiscoverSops:
         entries = discover_sops(workspace=tmp_path)
         assert entries == []
 
+    def test_discovers_repo_root_sops_from_seed_identity(self, tmp_path):
+        (tmp_path / "seed.yaml").write_text("repo: organvm-engine\norg: meta-organvm\n")
+        content = (
+            "---\nsop: true\nname: cli-module-pattern\nscope: repo\n"
+            "phase: any\ntriggers: []\ncomplements: []\noverrides: null\n---\n"
+            "# CLI Module Pattern\n"
+        )
+        (tmp_path / ".sops").mkdir(exist_ok=True)
+        (tmp_path / ".sops" / "cli-module-pattern.md").write_text(content)
+
+        entries = discover_sops(workspace=tmp_path)
+
+        assert len(entries) == 1
+        assert entries[0].org == "meta-organvm"
+        assert entries[0].repo == "organvm-engine"
+        assert entries[0].scope == "repo"
+
+    def test_root_sops_dir_does_not_mask_workspace_layout(self, tmp_path):
+        (tmp_path / ".sops").mkdir()
+        (tmp_path / ".sops" / "root.md").write_text("# Root SOP\n")
+        _make_sop(tmp_path, "meta-organvm", "repo", "SOP--workspace.md")
+
+        entries = discover_sops(workspace=tmp_path)
+
+        assert len(entries) == 1
+        assert entries[0].filename == "SOP--workspace.md"
+
     def test_ignores_non_md_files(self, tmp_path):
         d = tmp_path / "meta-organvm" / "repo"
         d.mkdir(parents=True)

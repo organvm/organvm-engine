@@ -65,6 +65,19 @@ class TestResolveSop:
         assert result[1].scope == "organ"
         assert result[2].scope == "system"
 
+    def test_unknown_shadow_copy_removed_when_governed_entry_exists(self):
+        system = _entry("pitch-deck-rollout", scope="system")
+        legacy = _entry("pitch-deck-rollout", scope="unknown", repo="engine")
+        result = resolve_sop("pitch-deck-rollout", [system, legacy])
+        assert len(result) == 1
+        assert result[0].scope == "system"
+
+    def test_exact_duplicate_entries_are_collapsed(self):
+        first = _entry("prompting-standards", scope="system")
+        duplicate = _entry("prompting-standards", scope="system")
+        result = resolve_sop("prompting-standards", [first, duplicate])
+        assert len(result) == 1
+
 
 class TestResolveAll:
     def test_system_always_included(self):
@@ -127,6 +140,17 @@ class TestResolveAll:
         legacy = _entry("old-sop", scope="unknown", org="meta-organvm")
         result = resolve_all([legacy], organ="meta-organvm")
         assert len(result) == 1
+
+    def test_unknown_scope_duplicate_excluded_from_active_directives(self):
+        system = _entry("ira-grade-norming", scope="system")
+        legacy = _entry("ira-grade-norming", scope="unknown", repo="organvm-engine")
+        result = resolve_all(
+            [system, legacy],
+            repo="organvm-engine",
+            organ="meta-organvm",
+        )
+        assert len(result) == 1
+        assert result[0].scope == "system"
 
     def test_resolve_filters_by_phase(self):
         hardening = _entry("deploy", scope="system", phase="hardening")

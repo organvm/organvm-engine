@@ -72,6 +72,9 @@ def _apply_overrides(entries: list[SOPEntry]) -> list[SOPEntry]:
     An entry with ``overrides=X`` removes entries named X that do NOT
     themselves declare an override — i.e., the overrider survives.
     """
+    entries = _drop_duplicate_entries(entries)
+    entries = _drop_unknown_shadow_entries(entries)
+
     overriders: set[int] = set()
     overridden_names: set[str] = set()
     for e in entries:
@@ -84,3 +87,38 @@ def _apply_overrides(entries: list[SOPEntry]) -> list[SOPEntry]:
         if id(e) in overriders or e.sop_name not in overridden_names
     ]
     return sorted(result, key=lambda e: _SCOPE_PRIORITY.get(e.scope, 99))
+
+
+def _drop_duplicate_entries(entries: list[SOPEntry]) -> list[SOPEntry]:
+    """Collapse exact duplicate discovery entries while preserving order."""
+    result: list[SOPEntry] = []
+    seen: set[tuple[str, str | None, str, str, str, str]] = set()
+    for entry in entries:
+        key = (
+            str(entry.path),
+            entry.sop_name,
+            entry.scope,
+            entry.phase,
+            entry.org,
+            entry.repo,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(entry)
+    return result
+
+
+def _drop_unknown_shadow_entries(entries: list[SOPEntry]) -> list[SOPEntry]:
+    """Remove legacy unknown-scope copies when a governed entry of that SOP exists."""
+    governed_names = {
+        entry.sop_name
+        for entry in entries
+        if entry.sop_name and entry.scope in {"system", "organ", "repo"}
+    }
+    if not governed_names:
+        return entries
+    return [
+        entry for entry in entries
+        if not (entry.scope == "unknown" and entry.sop_name in governed_names)
+    ]

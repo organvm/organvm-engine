@@ -183,10 +183,36 @@ def sync_all(
 
     # Emit context sync event
     if not dry_run:
+        if changes:
+            import json
+            import time
+            from organvm_engine.paths import PathConfig, context_changelog_path
+            
+            sync_timestamp = int(time.time())
+            # Use explicit config based on the passed workspace, to support tests.
+            config = PathConfig(workspace_dir=workspace) if workspace else None
+            changelog_file = context_changelog_path(config)
+            try:
+                changelog_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(changelog_file, "a", encoding="utf-8") as f:
+                    for change in changes:
+                        record = {
+                            "timestamp": sync_timestamp,
+                            "path": change["path"],
+                            "action": change["action"],
+                            "diff": change.get("diff", ""),
+                            "old_section": change.get("old_section", ""),
+                            "new_section": change.get("new_section", ""),
+                        }
+                        f.write(json.dumps(record) + "\n")
+            except Exception as e:
+                # Fallback or silent failure if no corpus repo exists in test envs
+                pass
+
         try:
             from organvm_engine.pulse.emitter import emit_engine_event
             from organvm_engine.pulse.types import CONTEXT_SYNCED
-
+            
             emit_engine_event(
                 event_type=CONTEXT_SYNCED,
                 source="contextmd",
@@ -199,7 +225,7 @@ def sync_all(
             )
         except Exception:
             pass
-
+            
         # Emit to Testament Chain
         from organvm_engine.ledger.emit import testament_emit
         testament_emit(
@@ -216,7 +242,6 @@ def sync_all(
         )
 
     return result
-
 
 def _discover_flat_seeds(root: Path) -> list[Path]:
     """Find seed.yaml files in a flat root shaped as <root>/<repo>/seed.yaml."""
@@ -468,6 +493,8 @@ def _build_change_record(
         "before_hash": _section_hash(old_section),
         "after_hash": _section_hash(new_section),
         "diff": "\n".join(diff_lines),
+        "old_section": old_section,
+        "new_section": new_section,
     }
 
 

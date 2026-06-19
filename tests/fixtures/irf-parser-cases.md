@@ -28,7 +28,7 @@ including the five drop categories enumerated 2026-06-07 (IRF-OPS-091 chain).
 
 | ID | What | Reason | Date |
 |----|------|--------|------|
-| IRF-SYS-155 | 4-cell ledger-shaped row in a Blocked section (category C) | xattr corruption | 2026-05-16 |
+| IRF-SYS-155 | 4-cell ledger-shaped row mentioning P4 in a Blocked section (category C) | xattr corruption | 2026-05-16 |
 
 ## Completed (ledger)
 

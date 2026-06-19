@@ -82,6 +82,12 @@ def _clean_priority(value: str) -> str:
     return match.group(0) if match else cleaned
 
 
+def _is_priority_cell(value: str) -> bool:
+    """Return whether a cell is an active-row priority/DONE-ref cell."""
+    cleaned = _strip_cell_markup(value)
+    return bool(re.match(r"^P[0-4]$", cleaned) or _DONE_REF_RE.match(cleaned))
+
+
 def _section_status(section: str) -> str:
     """Map a section header text to a status string."""
     lower = section.lower()
@@ -122,6 +128,8 @@ def _parse_active_row(cells: list[str], status: str, section: str) -> IRFItem | 
         return None
     raw_item_id = cells[0]
     raw_priority = cells[1]
+    if len(cells) < 6 and not _is_priority_cell(raw_priority):
+        return None
     action = cells[2]
     owner = cells[3] if len(cells) > 3 else ""
     source = cells[4] if len(cells) > 4 else ""

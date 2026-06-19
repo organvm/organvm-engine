@@ -194,12 +194,12 @@ def diff_pinned(
 
 def check_uncommitted_files(workspace: Path | str | None = None) -> list[dict]:
     """Check for uncommitted files across all repos in the workspace.
-    
+
     Enforces the 'Nothing Local Only' covenant.
     """
     ws = Path(workspace) if workspace else DEFAULT_WORKSPACE
     uncommitted_reports = []
-    
+
     if not ws.exists():
         return uncommitted_reports
 
@@ -208,28 +208,28 @@ def check_uncommitted_files(workspace: Path | str | None = None) -> list[dict]:
         organ_path = ws / organ_dir
         if not (organ_path / ".git").exists():
             continue
-            
+
         result = _run_git(["submodule", "status"], organ_path)
         if result.returncode != 0:
             continue
-            
+
         for line in result.stdout.rstrip("\n").split("\n"):
             if not line.strip():
                 continue
             parts = line[1:].strip().split()
             if len(parts) < 2:
                 continue
-                
+
             repo_name = parts[1]
             repo_path = organ_path / repo_name
-            
+
             if not (repo_path / ".git").exists():
                 continue
-                
+
             status_result = _run_git(["status", "--porcelain"], repo_path)
             if status_result.returncode != 0:
                 continue
-                
+
             files = [line for line in status_result.stdout.strip().split("\n") if line.strip()]
             if files:
                 uncommitted_reports.append(
@@ -237,8 +237,8 @@ def check_uncommitted_files(workspace: Path | str | None = None) -> list[dict]:
                         "organ": organ_dir,
                         "repo": repo_name,
                         "uncommitted_count": len(files),
-                        "files": files[:5] + (["..."] if len(files) > 5 else [])
-                    }
+                        "files": files[:5] + (["..."] if len(files) > 5 else []),
+                    },
                 )
-                
+
     return uncommitted_reports

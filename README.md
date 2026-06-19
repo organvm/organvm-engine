@@ -37,6 +37,9 @@ organvm dispatch validate payload.json
 # Context
 organvm context sync --dry-run
 organvm context surfaces --workspace ~/Workspace --json
+
+# SOPs
+organvm sop stale --repo-root . --strict
 ```
 
 ## Library Usage
@@ -62,6 +65,7 @@ print(result.summary())
 | `metrics` | Compute and propagate system-wide metrics |
 | `dispatch` | Cross-organ event routing and cascade planning |
 | `contextmd` | Sync AI context files and discover exported conversation-corpus surfaces |
+| `sop` | Discover SOPs, resolve active directives, and detect stale governed-code references |
 
 ## Part of the Eight-Organ System
 

@@ -6,6 +6,11 @@ phase: any
 triggers: []
 complements: []
 overrides: null
+governs:
+  - src/organvm_engine/prompting/
+  - src/organvm_engine/contextmd/
+  - tests/test_prompting_standards.py
+  - tests/test_contextmd.py
 ---
 # Prompting Standards
 

@@ -37,6 +37,7 @@ def generate_sop_scaffold(
         "triggers: []",
         "complements: []",
         "overrides: null",
+        "governs: []",
         "---",
         f"# SOP: {title}",
         "",

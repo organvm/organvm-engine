@@ -36,6 +36,7 @@ Usage:
     organvm context surfaces [--workspace <path>] [--repo <name>] [--json]
     organvm handoff list [--workspace <path>] [--json]
     organvm handoff clean [--workspace <path>] [--older-than 7d] [--write]
+    organvm sop stale [--repo-root <path>] [--json] [--strict]
     organvm prompts narrate [--agent claude|gemini|codex] [--project FILTER] [--output FILE] [--summary FILE] [--dry-run] [--gap-hours 24]
     organvm plans atomize [--plans-dir DIR] [--output FILE] [--summary FILE] [--dry-run]
     organvm atoms link [--threshold 0.25] [--by-thread] [--json] [--output FILE]
@@ -284,6 +285,7 @@ from organvm_engine.cli.sop import (
     cmd_sop_discover,
     cmd_sop_init,
     cmd_sop_resolve,
+    cmd_sop_stale,
 )
 from organvm_engine.cli.status import cmd_status
 from organvm_engine.cli.study import (
@@ -367,7 +369,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output format",
     )
     ls.add_argument("--json", action="store_true", help="Output JSON")
-    ls.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
 
     search = reg_sub.add_parser("search", help="Search repos by text query")
     search.add_argument("query")
@@ -1921,6 +1922,36 @@ def build_parser() -> argparse.ArgumentParser:
         "--strict",
         action="store_true",
         help="Exit 1 on any untracked or missing SOPs",
+    )
+
+    sop_stale = sop_sub.add_parser(
+        "stale",
+        help="Cross-reference SOPs against governed code freshness",
+    )
+    sop_stale.add_argument(
+        "--repo-root",
+        default=None,
+        help="Audit a single flat repository checkout instead of workspace layout",
+    )
+    sop_stale.add_argument(
+        "--json",
+        action="store_true",
+        help="Output machine-readable JSON",
+    )
+    sop_stale.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit 1 on stale or missing governed code references",
+    )
+    sop_stale.add_argument(
+        "--require-governs",
+        action="store_true",
+        help="Treat SOPs without governs metadata as strict failures",
+    )
+    sop_stale.add_argument(
+        "--linked-only",
+        action="store_true",
+        help="Suppress SOPs without governs metadata from the report",
     )
 
     sop_resolve = sop_sub.add_parser(
@@ -3588,6 +3619,7 @@ def main() -> int:
             "audit": cmd_sop_audit,
             "check": cmd_sop_check,
             "resolve": cmd_sop_resolve,
+            "stale": cmd_sop_stale,
             "init": cmd_sop_init,
         }
         handler = sop_dispatch.get(getattr(args, "subcommand", "") or "")

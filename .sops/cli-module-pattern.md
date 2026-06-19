@@ -7,6 +7,10 @@ triggers:
   - context:new-cli-command
 complements: []
 overrides: null
+governs:
+  - src/organvm_engine/cli/__init__.py
+  - src/organvm_engine/cli/*.py
+  - tests/test_cli.py
 ---
 # CLI Module Pattern
 
@@ -31,3 +35,4 @@ Defines how to add a new command group to the `organvm` CLI. The CLI is a packag
 - `organvm {group} --help` shows subcommands
 - `ruff check src/organvm_engine/cli/{group}.py` passes
 - `pytest tests/ -k {group} -v` passes
+- `organvm sop stale --repo-root . --linked-only` resolves governed-code references

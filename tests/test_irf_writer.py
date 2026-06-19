@@ -60,7 +60,11 @@ def test_done_ref_in_priority_cell_parses_as_completed():
 def test_ledger_row_in_blocked_section_parses():
     """Category C — 4-cell ledger-shaped rows outside Completed sections."""
     items = {i.id: i for i in parse_irf(CASES)}
-    assert items["IRF-SYS-155"].status == "blocked"
+    item = items["IRF-SYS-155"]
+    assert item.status == "blocked"
+    assert item.priority == ""
+    assert item.owner == ""
+    assert "mentioning P4" in item.action
 
 
 def test_short_done_row_parses():
@@ -86,6 +90,12 @@ def test_stats_count_short_tail_row_priority():
     """Category E rows must contribute to priority stats, not just total."""
     stats = irf_stats(parse_irf(CASES))
     assert stats["by_priority"]["P2"] == 2
+
+
+def test_stats_ignore_priority_mentions_in_short_ledger_rows():
+    """Short ledger-shaped rows may mention P-levels without becoming active rows."""
+    stats = irf_stats(parse_irf(CASES))
+    assert stats["by_priority"]["P4"] == 0
 
 
 def test_late_file_row_resolves():

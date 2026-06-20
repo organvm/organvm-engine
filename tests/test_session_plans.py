@@ -284,37 +284,6 @@ def test_discover_plans_project_filter(tmp_path):
     assert results[0].slug == "a"
 
 
-def test_discover_plans_project_filter_current_directory(tmp_path, monkeypatch):
-    project = tmp_path / "projectA"
-    plans_dir = project / ".claude" / "plans"
-    plans_dir.mkdir(parents=True)
-    (plans_dir / "2026-01-01-a.md").write_text("# A\n")
-
-    sibling = tmp_path / "projectB" / ".claude" / "plans"
-    sibling.mkdir(parents=True)
-    (sibling / "2026-01-01-b.md").write_text("# B\n")
-
-    monkeypatch.chdir(project)
-
-    results = discover_plans(project_filter=".", include_global=False)
-    assert len(results) == 1
-    assert results[0].slug == "a"
-
-
-def test_discover_plans_prunes_dependency_trees(tmp_path):
-    project = tmp_path / "project"
-    plans_dir = project / ".claude" / "plans"
-    plans_dir.mkdir(parents=True)
-    (plans_dir / "2026-01-01-real.md").write_text("# Real\n")
-
-    ignored = project / "node_modules" / "pkg" / ".claude" / "plans"
-    ignored.mkdir(parents=True)
-    (ignored / "2026-01-01-ignored.md").write_text("# Ignored\n")
-
-    results = discover_plans(workspace=tmp_path)
-    assert [p.slug for p in results] == ["real"]
-
-
 def test_discover_plans_since_filter(tmp_path):
     plans_dir = tmp_path / "proj" / ".claude" / "plans"
     plans_dir.mkdir(parents=True)

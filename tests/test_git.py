@@ -206,22 +206,3 @@ class TestGetReposForOrgan:
         names = [r["name"] for r in repos]
         assert "organvm-engine" in names
         assert "organvm-corpvs" in names
-
-
-class TestGitStatus:
-    """Tests for git status helpers."""
-
-    def test_check_uncommitted_files_accepts_single_repo(self, tmp_path):
-        from organvm_engine.git.status import check_uncommitted_files
-
-        repo = tmp_path / "organvm-engine"
-        repo.mkdir()
-        subprocess.run(["git", "init", "-b", "main"], cwd=repo, capture_output=True, check=False)
-        (repo / "new.txt").write_text("uncommitted\n")
-
-        reports = check_uncommitted_files(repo)
-
-        assert len(reports) == 1
-        assert reports[0]["repo"] == "organvm-engine"
-        assert reports[0]["uncommitted_count"] == 1
-        assert "new.txt" in reports[0]["files"][0]

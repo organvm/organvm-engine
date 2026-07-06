@@ -285,7 +285,7 @@ def _resolve_governed_paths(
 def _expand_candidate(candidate: Path) -> list[Path]:
     candidate_str = str(candidate)
     if any(token in candidate_str for token in ("*", "?", "[")):
-        return [Path(p) for p in glob.glob(candidate_str, recursive=True) if Path(p).exists()]
+        return [Path(p) for p in glob.glob(candidate_str, recursive=True) if Path(p).exists()]  # noqa: PTH207
     return [candidate] if candidate.exists() else []
 
 

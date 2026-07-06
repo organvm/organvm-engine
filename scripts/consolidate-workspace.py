@@ -8,13 +8,11 @@ Migrates from 8-org directory structure to 2-entity flat pool:
 
 Run with --dry-run (default) to preview, --execute to perform the migration.
 """
-import os
-import sys
 import shutil
 import subprocess
-import json
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
 
 WORKSPACE = Path.home() / "Workspace"
 TARGET_SYSTEM = WORKSPACE / "organvm"
@@ -91,7 +89,7 @@ def get_remote_url(repo: Path) -> str:
     try:
         result = subprocess.run(
             ["git", "-C", str(repo), "remote", "get-url", "origin"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=5,
         )
         return result.stdout.strip() if result.returncode == 0 else ""
     except Exception:
@@ -153,15 +151,7 @@ def plan_migration() -> dict:
 
     # 4. Root cleanup candidates
     for item in WORKSPACE.iterdir():
-        if item.name.startswith("export-") and item.name.endswith(".md"):
-            plan["root_cleanup"].append(str(item))
-        elif item.name.startswith("2026-") and item.suffix in (".txt", ".md"):
-            plan["root_cleanup"].append(str(item))
-        elif item.name.startswith("session-") and item.name.endswith(".md"):
-            plan["root_cleanup"].append(str(item))
-        elif item.name == "sync_interlinked_landing_pages.sh":
-            plan["root_cleanup"].append(str(item))
-        elif item.name == "text-based--relevance.md":
+        if item.name.startswith("export-") and item.name.endswith(".md") or item.name.startswith("2026-") and item.suffix in (".txt", ".md") or item.name.startswith("session-") and item.name.endswith(".md") or item.name in {"sync_interlinked_landing_pages.sh", "text-based--relevance.md"}:
             plan["root_cleanup"].append(str(item))
 
     # Stats
@@ -219,7 +209,7 @@ def execute_migration(plan: dict) -> None:
                 except Exception as e:
                     print(f"[ERROR] cleaning {item.name}: {e}")
 
-    print(f"\n[DONE] Migration complete. Verify with: ls ~/Workspace/organvm/ | wc -l")
+    print("\n[DONE] Migration complete. Verify with: ls ~/Workspace/organvm/ | wc -l")
 
 
 def print_plan(plan: dict) -> None:
@@ -228,12 +218,12 @@ def print_plan(plan: dict) -> None:
     print("ORGANVM WORKSPACE CONSOLIDATION — DRY RUN")
     print("=" * 70)
 
-    print(f"\n## Stats")
+    print("\n## Stats")
     for k, v in plan["stats"].items():
         print(f"  {k}: {v}")
 
     if plan["errors"]:
-        print(f"\n## ERRORS (must resolve before executing)")
+        print("\n## ERRORS (must resolve before executing)")
         for e in plan["errors"]:
             print(f"  ! {e}")
 
@@ -244,7 +234,7 @@ def print_plan(plan: dict) -> None:
         print(f"  ... and {len(plan['moves_to_system']) - 10} more")
 
     if plan["standalone_to_system"]:
-        print(f"\n  Standalone:")
+        print("\n  Standalone:")
         for src, dest in plan["standalone_to_system"]:
             print(f"  {Path(src).name} → organvm/{Path(dest).name}")
 

@@ -35,6 +35,11 @@ class RelationType(str, Enum):
     NAMING = "NAMING"                        # name record association
     INHERENCE = "INHERENCE"                  # dependent entity inhering in bearer
     PROMOTION_CONSTRAINT = "PROMOTION_CONSTRAINT"  # governance constraint on promotion
+    DEFINES = "DEFINES"                      # concept definition
+    REFERENCES = "REFERENCES"                # concept reference
+    IMPLEMENTS = "IMPLEMENTS"                # repo implements concept
+    GROUNDS = "GROUNDS"                      # concept grounding
+    EXTRACTED_FROM = "EXTRACTED_FROM"        # document extracted from transcript
 
 
 # ---------------------------------------------------------------------------

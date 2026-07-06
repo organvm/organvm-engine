@@ -2,10 +2,10 @@
   "agent": "opencode",
   "status": "idle",
   "accepting_tasks": true,
-  "available_tokens": 31199078,
-  "available_pct": 62.4,
-  "current_task_id": "HEAL-cifix-organvm-organvm-engine-131",
-  "heartbeat": "2026-07-06T06:43:52.375230+00:00",
-  "token_usage_pct": 37.6,
+  "available_tokens": 31168434,
+  "available_pct": 62.3,
+  "current_task_id": "HEAL-cifix-organvm-organvm-engine-132",
+  "heartbeat": "2026-07-06T06:48:44.177278+00:00",
+  "token_usage_pct": 37.66,
   "clock_health": "ok"
 }

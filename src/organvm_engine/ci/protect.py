@@ -16,12 +16,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from pathlib import Path
-
-from organvm_engine.ci.audit import _is_docs_only
-from organvm_engine.ci.mandate import _resolve_repo_path
-from organvm_engine.organ_config import registry_key_to_dir
-from organvm_engine.paths import workspace_root
 
 
 @dataclass
@@ -56,10 +50,7 @@ class ProtectionPayload:
 
     def to_gh_command(self) -> str:
         """Generate the full ``gh api`` command string."""
-        endpoint = (
-            f"repos/{self.org}/{self.repo_name}/"
-            f"branches/{self.branch}/protection"
-        )
+        endpoint = f"repos/{self.org}/{self.repo_name}/branches/{self.branch}/protection"
         payload_json = json.dumps(self.to_api_json(), indent=2)
         return (
             f"gh api -X PUT \"{endpoint}\" "
@@ -67,15 +58,11 @@ class ProtectionPayload:
         )
 
     def to_dict(self) -> dict:
-        endpoint = (
-            f"repos/{self.org}/{self.repo_name}/"
-            f"branches/{self.branch}/protection"
-        )
         return {
             "org": self.org,
             "repo": self.repo_name,
             "branch": self.branch,
-            "endpoint": endpoint,
+            "endpoint": f"repos/{self.org}/{self.repo_name}/branches/{self.branch}/protection",
             "payload": self.to_api_json(),
             "command": self.to_gh_command(),
         }
@@ -141,7 +128,6 @@ def plan_branch_protection(
     *,
     organ_filter: str | None = None,
     repo_filter: str | None = None,
-    workspace: Path | None = None,
 ) -> ProtectionPlan:
     """Build a branch protection plan from the registry.
 
@@ -152,14 +138,11 @@ def plan_branch_protection(
         registry: Loaded registry dict.
         organ_filter: Optional organ key filter (e.g., 'ORGAN-I').
         repo_filter: Optional repo name filter.
-        workspace: Optional workspace root for docs-only detection.
 
     Returns:
         ProtectionPlan with commands and skip reasons.
     """
     plan = ProtectionPlan()
-    ws = workspace or workspace_root()
-    key_to_dir = registry_key_to_dir()
 
     organs = registry.get("organs", {})
     for organ_key, organ_data in organs.items():
@@ -194,21 +177,6 @@ def plan_branch_protection(
                 plan.skipped.append({
                     "repo": f"{org_name}/{repo_name}",
                     "reason": "archived",
-                })
-                continue
-
-            # Skip docs-only
-            repo_path = _resolve_repo_path(
-                org_name,
-                repo_name,
-                organ_key,
-                ws,
-                key_to_dir,
-            )
-            if _is_docs_only(repo_name, repo_path):
-                plan.skipped.append({
-                    "repo": f"{org_name}/{repo_name}",
-                    "reason": "docs-only",
                 })
                 continue
 

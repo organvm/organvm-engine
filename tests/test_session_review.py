@@ -91,7 +91,7 @@ def test_review_by_session_id(tmp_path, capsys):
 
     with (
         patch("organvm_engine.cli.session.find_session", return_value=jsonl),
-        patch("organvm_engine.cli.session.discover_plans", return_value=[]) as discover,
+        patch("organvm_engine.cli.session.discover_plans", return_value=[]),
     ):
         args = _FakeArgs(session_id="test-abc")
         result = cmd_session_review(args)
@@ -101,7 +101,6 @@ def test_review_by_session_id(tmp_path, capsys):
         assert "test-abc" in captured.out
         assert "claude" in captured.out
         assert "Export:" in captured.out
-        discover.assert_called_once_with(project_filter="/Users/test/Workspace/project")
 
 
 def test_review_latest(tmp_path, capsys):

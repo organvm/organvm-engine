@@ -1,6 +1,5 @@
 """Tests for the contextmd module (context file generation and sync)."""
 
-import json
 from pathlib import Path
 
 import pytest
@@ -13,12 +12,7 @@ from organvm_engine.contextmd.generator import (
     generate_repo_section,
     generate_workspace_section,
 )
-from organvm_engine.contextmd.sync import (
-    _inject_section,
-    _inject_section_result,
-    sync_all,
-    sync_repo,
-)
+from organvm_engine.contextmd.sync import _inject_section, _inject_section_result, sync_repo
 from organvm_engine.contextmd.templates import VARIABLE_STATUS_SECTION
 from organvm_engine.registry.loader import load_registry
 
@@ -293,44 +287,6 @@ class TestBuildVariableContext:
         assert "42 recorded" in rendered
         assert "organvm ontologia status" in rendered
         assert "organvm refresh" in rendered
-
-
-class TestSyncAll:
-    def test_persists_changelog_jsonl_in_write_mode(self, tmp_path, monkeypatch):
-        import organvm_engine.contextmd.sync as sync_mod
-        import organvm_engine.ledger.emit as ledger_emit
-        import organvm_engine.pulse.emitter as pulse_emitter
-
-        workspace = tmp_path / "workspace"
-        workspace.mkdir()
-
-        monkeypatch.setattr(sync_mod, "precompute_ammoi", lambda: None)
-        monkeypatch.setattr(pulse_emitter, "emit_engine_event", lambda *args, **kwargs: None)
-        monkeypatch.setattr(ledger_emit, "testament_emit", lambda *args, **kwargs: None)
-
-        result = sync_all(
-            workspace=workspace,
-            registry_path=str(FIXTURES / "registry-minimal.json"),
-            dry_run=False,
-            organs=["ORGAN-I"],
-            additional_workspace_roots=[],
-        )
-
-        changelog_path = workspace / "context-sync-changelog.jsonl"
-        records = [
-            json.loads(line)
-            for line in changelog_path.read_text(encoding="utf-8").splitlines()
-        ]
-
-        assert result["errors"] == []
-        assert result["changelog_path"] == str(changelog_path)
-        assert changelog_path.is_file()
-        assert len(records) == len(result["changelog"])
-        assert {record["path"] for record in records} == {
-            change["path"] for change in result["changelog"]
-        }
-        assert all(record["synced_at"].endswith("Z") for record in records)
-        assert all(record["diff"] for record in records)
 
 
 class TestSyncRepo:

@@ -489,10 +489,9 @@ def cmd_session_review(args: argparse.Namespace) -> int:
         print(f"  ... and {len(prompt_lines) - 10} more")
     print()
 
-    # Find related plans. Prefer the real cwd over Claude's encoded project
-    # directory name so discovery can use the exact-project fast path.
-    project_scope = meta.cwd or meta.project_dir
-    plans = discover_plans(project_filter=project_scope) if project_scope else []
+    # Find related plans
+    project_slug = meta.project_dir or meta.cwd
+    plans = discover_plans(project_filter=project_slug)
 
     if plans:
         print(f"Plans in this project ({len(plans)} total):")
@@ -527,13 +526,7 @@ def cmd_session_review(args: argparse.Namespace) -> int:
     # Check for uncommitted files (Nothing Local Only enforcement)
     try:
         from organvm_engine.git.status import check_uncommitted_files
-
-        status_scope = Path(project_scope).expanduser() if project_scope else None
-        uncommitted = (
-            check_uncommitted_files(status_scope)
-            if status_scope is not None and status_scope.is_dir()
-            else []
-        )
+        uncommitted = check_uncommitted_files()
         if uncommitted:
             print("\nWARNING: Uncommitted files detected (Nothing Local Only covenant violation):")
             for report in uncommitted:

@@ -13,8 +13,6 @@ from __future__ import annotations
 
 import difflib
 import hashlib
-import json
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -26,8 +24,6 @@ from organvm_engine.contextmd.generator import (
     generate_workspace_section,
     precompute_ammoi,
 )
-
-CONTEXT_SYNC_CHANGELOG = "context-sync-changelog.jsonl"
 
 
 def sync_all(
@@ -175,18 +171,6 @@ def sync_all(
         except Exception as e:
             errors.append({"path": str(ws / filename), "error": str(e)})
 
-    changelog_path = ws / CONTEXT_SYNC_CHANGELOG
-    if changes and not dry_run:
-        try:
-            _append_context_sync_changelog(changelog_path, changes)
-        except Exception as e:
-            errors.append(
-                {
-                    "path": str(changelog_path),
-                    "error": f"failed to write context sync changelog: {e}",
-                },
-            )
-
     result = {
         "updated": updated,
         "created": created,
@@ -195,7 +179,6 @@ def sync_all(
         "dry_run": dry_run,
         "changes": changes,
         "changelog": changes,
-        "changelog_path": str(changelog_path),
     }
 
     # Emit context sync event
@@ -492,23 +475,3 @@ def _section_hash(section: str) -> str | None:
     if not section:
         return None
     return hashlib.sha256(section.encode("utf-8")).hexdigest()[:12]
-
-
-def _append_context_sync_changelog(
-    changelog_path: Path,
-    changes: list[dict[str, Any]],
-) -> None:
-    """Append generated context-section changes for cross-run audit review."""
-    synced_at = (
-        datetime.now(timezone.utc)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
-    with changelog_path.open("a", encoding="utf-8") as f:
-        for change in changes:
-            record = {
-                "synced_at": synced_at,
-                **change,
-            }
-            f.write(json.dumps(record, sort_keys=True) + "\n")

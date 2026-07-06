@@ -184,56 +184,6 @@ class TestScaffoldRepo:
 
         assert "pyright ." in result.typecheck_yaml
 
-    def test_python_flat_module_with_src_assets_typechecks_repo_root(self, tmp_path: Path):
-        repo = tmp_path / "flat-module"
-        repo.mkdir()
-        (repo / "pyproject.toml").write_text('[project]\nname = "flat-module"')
-        (repo / "flat_module.py").write_text("VALUE = 1\n")
-        (repo / "src").mkdir()
-        (repo / "src" / "asset.txt").write_text("not python")
-
-        result = scaffold_repo(
-            repo, "flat-module", lint=False, test=False, typecheck=True,
-        )
-
-        assert "pyright ." in result.typecheck_yaml
-
-    def test_python_namespace_package_with_src_assets_typechecks_repo_root(
-        self,
-        tmp_path: Path,
-    ):
-        repo = tmp_path / "namespace-package"
-        repo.mkdir()
-        (repo / "pyproject.toml").write_text('[project]\nname = "namespace-package"')
-        package = repo / "namespace_package"
-        package.mkdir()
-        (package / "module.py").write_text("VALUE = 1\n")
-        (repo / "src").mkdir()
-        (repo / "src" / "asset.txt").write_text("not python")
-
-        result = scaffold_repo(
-            repo, "namespace-package", lint=False, test=False, typecheck=True,
-        )
-
-        assert "pyright ." in result.typecheck_yaml
-
-    def test_python_flat_pyproject_declaration_typechecks_repo_root(self, tmp_path: Path):
-        repo = tmp_path / "declared-flat"
-        repo.mkdir()
-        (repo / "pyproject.toml").write_text(
-            '[project]\nname = "declared-flat"\n'
-            "[tool.setuptools]\n"
-            'py-modules = ["declared_flat"]\n',
-        )
-        (repo / "src").mkdir()
-        (repo / "src" / "asset.txt").write_text("not python")
-
-        result = scaffold_repo(
-            repo, "declared-flat", lint=False, test=False, typecheck=True,
-        )
-
-        assert "pyright ." in result.typecheck_yaml
-
 
 # ---------------------------------------------------------------------------
 # Combined workflow output

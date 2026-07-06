@@ -372,7 +372,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output format",
     )
     ls.add_argument("--json", action="store_true", help="Output JSON")
-    ls.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
 
     search = reg_sub.add_parser("search", help="Search repos by text query")
     search.add_argument("query")
@@ -1173,7 +1172,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=1,
         help="Number of recent syncs to show (default: 1)",
     )
-    
+
     c_rollback = ctx_sub.add_parser(
         "rollback",
         help="Rollback a previous context sync",

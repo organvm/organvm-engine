@@ -26,6 +26,11 @@ class TestRelationType:
         expected = {
             "CONTAINMENT", "LINEAGE", "DEPENDENCY", "DATA_FLOW",
             "SUBSCRIPTION", "NAMING", "INHERENCE", "PROMOTION_CONSTRAINT",
+            "DEFINES",
+            "REFERENCES",
+            "IMPLEMENTS",
+            "GROUNDS",
+            "EXTRACTED_FROM",
         }
         actual = {rt.value for rt in RelationType}
         assert actual == expected

@@ -199,6 +199,18 @@ class TestRegistryCommands:
         assert "recursive-engine" in out
         assert "product-app" in out
 
+    def test_registry_list_json_format(self, capsys):
+        with patch("sys.argv", ["organvm", "--registry", MOCK_REGISTRY, "registry", "list", "--format", "json"]):
+            rc = main()
+        assert rc == 0
+        import json
+        out = capsys.readouterr().out
+        data = json.loads(out)
+        assert isinstance(data, list)
+        names = [item["name"] for item in data]
+        assert "recursive-engine" in names
+        assert "product-app" in names
+
     def test_registry_list_by_organ(self, capsys):
         with patch(
             "sys.argv",
@@ -341,6 +353,7 @@ class TestRegistryCommands:
         parser = build_parser()
         args = parser.parse_args(["registry", "list", "--format", "json"])
         assert args.format == "json"
+        assert args.json is False
 
     def test_registry_validate_passes(self, capsys):
         with patch("sys.argv", ["organvm", "--registry", MOCK_REGISTRY, "registry", "validate"]):

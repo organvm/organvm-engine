@@ -88,6 +88,26 @@ def test_stats_count_short_tail_row_priority():
     assert stats["by_priority"]["P2"] == 2
 
 
+def test_tail_row_without_leading_pipe_parses_and_counts(tmp_path: Path):
+    """Tail-appended Markdown rows may omit the leading pipe; stats must see them."""
+    path = tmp_path / "irf.md"
+    path.write_text(
+        CASES.read_text()
+        + "\n\n### S-tail Discovered Items (2026-06-18)\n\n"
+        + "ID | Priority | Action | Owner | Source | Blocker\n"
+        + "---|---|---|---|---|---\n"
+        + "IRF-TAIL-001 | P2 | Tail-created compact row | Agent | issue-71 | None\n",
+    )
+
+    items, skipped = parse_irf_diagnostics(path)
+    stats = irf_stats(items)
+
+    assert skipped == []
+    assert stats["total"] == len(parse_irf(CASES)) + 1
+    assert stats["by_domain"]["TAIL"] == 1
+    assert next(i for i in items if i.id == "IRF-TAIL-001").priority == "P2"
+
+
 def test_late_file_row_resolves():
     """IRF-OPS-088 — rows late in the file are reachable."""
     assert "IRF-OPS-087" in _ids(CASES)
@@ -246,6 +266,17 @@ def test_stats_regeneration_is_idempotent(working_copy: Path):
     write_in_place(working_copy, first.new_text)
     second = regenerate_stats_block(working_copy, date="2026-06-07")
     assert second.new_text == first.new_text
+
+
+def test_stats_regeneration_guards_compact_tail_rows(working_copy: Path):
+    write_in_place(
+        working_copy,
+        working_copy.read_text()
+        + "\nIRF-TAIL-001 | P2 | Tail-created compact row | Agent | issue-71 | None\n",
+    )
+
+    with pytest.raises(IRFWriteError, match="ID-bearing"):
+        regenerate_stats_block(working_copy, date="2026-06-18")
 
 
 # ---------------------------------------------------------------------------

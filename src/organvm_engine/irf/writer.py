@@ -33,7 +33,10 @@ from organvm_engine.irf.parser import (
     parse_irf_diagnostics,
 )
 
-_ID_LINE_RE = re.compile(r"^\|\s*(?:\*\*|~~|`)*\s*(IRF-(?:[A-Z]+-)+\d+[a-z]?|DONE-\d+[a-z]?)\b")
+_ID_LINE_RE = re.compile(
+    r"^\s*\|?\s*(?:\*\*|~~|`)*\s*"
+    r"(IRF-(?:[A-Z]+-)+\d+[a-z]?|DONE-\d+[a-z]?)\b",
+)
 
 AUTOGEN_NOTE = (
     "<!-- AUTOGEN: regenerate via `organvm irf stats --write` — do not hand-edit"

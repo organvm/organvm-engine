@@ -1,6 +1,7 @@
 """Tests for governance invariant validators (SPEC-003)."""
 
 import json
+from datetime import datetime, timezone
 
 import pytest
 
@@ -22,6 +23,7 @@ from organvm_engine.organ_config import FALLBACK_ORGAN_MAP
 @pytest.fixture
 def clean_registry():
     """A minimal valid registry with all observability fields populated."""
+    now_str = datetime.now(timezone.utc).isoformat()
     return {
         "organs": {
             "ORGAN-I": {
@@ -31,7 +33,7 @@ def clean_registry():
                         "org": "organvm-i-theoria",
                         "implementation_status": "ACTIVE",
                         "promotion_status": "PUBLIC_PROCESS",
-                        "last_validated": "2026-03-15",
+                        "last_validated": now_str,
                         "code_files": 10,
                         "test_files": 5,
                         "dependencies": [],
@@ -45,7 +47,7 @@ def clean_registry():
                         "org": "meta-organvm",
                         "implementation_status": "ACTIVE",
                         "promotion_status": "PUBLIC_PROCESS",
-                        "last_validated": "2026-03-15",
+                        "last_validated": now_str,
                         "code_files": 50,
                         "test_files": 20,
                         "dependencies": [],

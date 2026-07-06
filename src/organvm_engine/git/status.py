@@ -203,6 +203,12 @@ def check_uncommitted_files(workspace: Path | str | None = None) -> list[dict]:
     if not ws.exists():
         return uncommitted_reports
 
+    if (ws / ".git").exists() and not any(
+        (ws / organ_dir).is_dir() for organ_dir in ORGAN_DIR_MAP.values()
+    ):
+        report = _check_repo_uncommitted(ws, organ=ws.parent.name, repo=ws.name)
+        return [report] if report else []
+
     organs_to_check = dict(ORGAN_DIR_MAP)
     for _organ_key, organ_dir in organs_to_check.items():
         organ_path = ws / organ_dir
@@ -226,19 +232,26 @@ def check_uncommitted_files(workspace: Path | str | None = None) -> list[dict]:
             if not (repo_path / ".git").exists():
                 continue
 
-            status_result = _run_git(["status", "--porcelain"], repo_path)
-            if status_result.returncode != 0:
-                continue
-
-            files = [line for line in status_result.stdout.strip().split("\n") if line.strip()]
-            if files:
-                uncommitted_reports.append(
-                    {
-                        "organ": organ_dir,
-                        "repo": repo_name,
-                        "uncommitted_count": len(files),
-                        "files": files[:5] + (["..."] if len(files) > 5 else []),
-                    },
-                )
+            report = _check_repo_uncommitted(repo_path, organ=organ_dir, repo=repo_name)
+            if report:
+                uncommitted_reports.append(report)
 
     return uncommitted_reports
+
+
+def _check_repo_uncommitted(repo_path: Path, organ: str, repo: str) -> dict | None:
+    """Return an uncommitted-file report for one git repository."""
+    status_result = _run_git(["status", "--porcelain"], repo_path)
+    if status_result.returncode != 0:
+        return None
+
+    files = [line for line in status_result.stdout.strip().split("\n") if line.strip()]
+    if not files:
+        return None
+
+    return {
+        "organ": organ,
+        "repo": repo,
+        "uncommitted_count": len(files),
+        "files": files[:5] + (["..."] if len(files) > 5 else []),
+    }

@@ -105,7 +105,6 @@ from organvm_engine.cli.corpus import (
     cmd_corpus_trace,
 )
 from organvm_engine.cli.deadlines import cmd_deadlines
-from organvm_engine.cli.handoff import cmd_handoff_check, cmd_handoff_list
 from organvm_engine.cli.debt import cmd_debt_scan, cmd_debt_stats
 from organvm_engine.cli.dispatch import cmd_dispatch_validate
 from organvm_engine.cli.ecosystem import (
@@ -160,6 +159,7 @@ from organvm_engine.cli.governance import (
     cmd_governance_placement,
     cmd_governance_promote,
 )
+from organvm_engine.cli.handoff import cmd_handoff_check, cmd_handoff_list
 from organvm_engine.cli.indexer import (
     cmd_index_bridge,
     cmd_index_scan,

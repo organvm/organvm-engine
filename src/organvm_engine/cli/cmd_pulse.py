@@ -760,9 +760,10 @@ def cmd_pulse_ammoi(args: Namespace) -> int:
         if ammoi.density_delta_7d is not None:
             s = "+" if ammoi.density_delta_7d > 0 else ""
             print(f"     Δ7d:  {s}{ammoi.density_delta_7d:.1%}")
-        if getattr(ammoi, 'density_delta_30d', None) is not None:
-            s = "+" if ammoi.density_delta_30d > 0 else ""
-            print(f"     Δ30d: {s}{ammoi.density_delta_30d:.1%}")
+        delta_30d = getattr(ammoi, 'density_delta_30d', None)
+        if delta_30d is not None:
+            s = "+" if delta_30d > 0 else ""
+            print(f"     Δ30d: {s}{delta_30d:.1%}")
 
     print()
     if ammoi.organs:

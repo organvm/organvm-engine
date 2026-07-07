@@ -132,10 +132,10 @@ class TestPlanBranchProtection:
             "tier": "standard",
         })
         plan = plan_branch_protection(registry_with_graduated)
-        
+
         repo_names = {p.repo_name for p in plan.repos}
         assert ".github" not in repo_names
-        
+
         skip_reasons = {s["repo"]: s["reason"] for s in plan.skipped}
         assert skip_reasons.get("organvm-i-theoria/.github") == "docs-only"
 

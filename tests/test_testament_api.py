@@ -120,3 +120,36 @@ def test_summary_all_keys_present():
         "catalog", "network", "artifact_types", "source_modules",
     }
     assert set(result.keys()) == expected_keys
+
+
+# --- /testament/ route rendering ------------------------------------------
+
+def _sample_summary() -> dict:
+    return get_testament_summary(registry_path=FIXTURES / "registry-minimal.json")
+
+
+def test_render_testament_page_is_html():
+    from organvm_engine.testament.renderers.html import render_testament_page
+
+    html = render_testament_page(_sample_summary())
+    assert html.startswith("<!DOCTYPE html>")
+    assert "ORGANVM Testament" in html
+    assert "Organ Density" in html
+
+
+def test_render_testament_page_handles_empty_summary():
+    """Renderer must not crash on a minimal/empty payload."""
+    from organvm_engine.testament.renderers.html import render_testament_page
+
+    html = render_testament_page({})
+    assert html.startswith("<!DOCTYPE html>")
+    assert "no density data" in html
+
+
+def test_render_testament_page_includes_network_order():
+    from organvm_engine.testament.renderers.html import render_testament_page
+
+    summary = _sample_summary()
+    html = render_testament_page(summary)
+    for node in summary["network"]["execution_order"]:
+        assert node in html

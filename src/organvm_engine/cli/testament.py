@@ -53,6 +53,77 @@ def cmd_testament_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_testament_summary(args: argparse.Namespace) -> int:
+    """Emit the testament summary for the stakeholder portal's /testament/ route.
+
+    Default: human-readable digest. ``--json`` emits the full payload dict
+    (what the portal route consumes as an API response). ``--html`` renders the
+    self-contained dashboard page; with ``--output-dir`` it is written to disk.
+    """
+    from organvm_engine.testament import get_testament_summary
+
+    as_json = getattr(args, "json", False)
+    as_html = getattr(args, "html", False)
+    registry_path = getattr(args, "registry", None)
+    if registry_path:
+        registry_path = Path(registry_path)
+    catalog_dir = _resolve_base_dir(args)
+
+    summary = get_testament_summary(
+        registry_path=registry_path, catalog_dir=catalog_dir,
+    )
+
+    if as_json:
+        print(json.dumps(summary, indent=2, default=str))
+        return 0
+
+    if as_html:
+        from organvm_engine.testament.aesthetic import load_taste
+        from organvm_engine.testament.renderers.html import render_testament_page
+
+        taste = load_taste()
+        palette = {
+            "primary": taste.palette.primary,
+            "secondary": taste.palette.secondary,
+            "accent": taste.palette.accent,
+            "background": taste.palette.background,
+            "text": taste.palette.text,
+            "muted": taste.palette.muted,
+        }
+        html = render_testament_page(summary, palette=palette)
+
+        output_dir = getattr(args, "output_dir", None)
+        if output_dir:
+            out_path = Path(output_dir) / "testament.html"
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(html)
+            print(f"\n  Testament page written to {out_path}\n")
+        else:
+            print(html)
+        return 0
+
+    sys_data = summary["system"]
+    omega = summary["omega"]
+    cat = summary["catalog"]
+    net = summary["network"]
+    print("\n  ORGANVM Testament — Portal Summary")
+    print(f"  {'═' * 48}")
+    print(f"\n  Repositories:  {sys_data['total_repos']}  "
+          f"({sys_data['total_public']} public)")
+    print(f"  Organs:        {sys_data['total_organs']}")
+    print(f"  Omega:         {omega['met_count']}/{omega['total']}  "
+          f"({round(omega['met_ratio'] * 100)}% mature)")
+    print(f"  Artifacts:     {cat['total']}")
+    print(f"  Network:       {net['nodes']} nodes, "
+          f"{net['feedback_edges']} feedback edges")
+    if summary["densities"]:
+        print("\n  Organ density:")
+        for organ, val in sorted(summary["densities"].items(), key=lambda kv: -kv[1]):
+            print(f"    {organ:<14} {round(val * 100):>3}%")
+    print()
+    return 0
+
+
 def cmd_testament_render(args: argparse.Namespace) -> int:
     """Render testament artifacts from live system data."""
     from organvm_engine.testament.aesthetic import load_taste

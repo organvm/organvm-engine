@@ -10,7 +10,6 @@ capability.  Works standalone or via ``organvm ci scaffold <repo>``.
 
 from __future__ import annotations
 
-import tomllib
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -47,32 +46,7 @@ class ScaffoldResult:
             steps.append(self.typecheck_yaml)
         if not steps:
             return ""
-        return _wrap_workflow(
-            self.repo_name,
-            self.stack,
-            "\n".join(steps),
-            workflow_name=self.workflow_name(),
-        )
-
-    def workflow_name(self) -> str:
-        """Return the display name for the generated workflow."""
-        if self.typecheck_yaml and not self.lint_yaml and not self.test_yaml:
-            return "Type Check"
-        if self.lint_yaml and not self.test_yaml and not self.typecheck_yaml:
-            return "Lint"
-        if self.test_yaml and not self.lint_yaml and not self.typecheck_yaml:
-            return "Test"
-        return "CI"
-
-    def workflow_filename(self) -> str:
-        """Return a safe default filename for the generated workflow."""
-        if self.typecheck_yaml and not self.lint_yaml and not self.test_yaml:
-            return "type-check.yml"
-        if self.lint_yaml and not self.test_yaml and not self.typecheck_yaml:
-            return "lint.yml"
-        if self.test_yaml and not self.lint_yaml and not self.typecheck_yaml:
-            return "test.yml"
-        return "ci.yml"
+        return _wrap_workflow(self.repo_name, self.stack, "\n".join(steps))
 
 
 # ---------------------------------------------------------------------------
@@ -108,114 +82,41 @@ def detect_stack(repo_path: Path) -> Stack:
 # Step generators — each returns an indented YAML snippet for one job step
 # ---------------------------------------------------------------------------
 
-_PYTHON_LINT_STEP = """\
+_PYTHON_LINT_STEP = dedent("""\
       - name: Lint (ruff)
         run: |
           pip install ruff
-          ruff check src/"""
+          ruff check src/""")
 
-_TS_LINT_STEP = """\
+_TS_LINT_STEP = dedent("""\
       - name: Lint (eslint)
         run: |
           npm ci
-          npm run lint"""
+          npm run lint""")
 
-_PYTHON_TEST_STEP = """\
+_PYTHON_TEST_STEP = dedent("""\
       - name: Test (pytest)
         run: |
           pip install -e ".[dev]"
-          pytest tests/ -v"""
+          pytest tests/ -v""")
 
-_TS_TEST_STEP = """\
+_TS_TEST_STEP = dedent("""\
       - name: Test
         run: |
           npm ci
-          npm test"""
+          npm test""")
 
-def _python_typecheck_target(repo_path: Path) -> str:
-    """Return the pyright target for a Python repository.
-
-    Src-layout packages should check ``src/``.  Flat-layout packages should
-    check the repository root; otherwise repos with package directories beside
-    ``pyproject.toml`` are silently skipped.
-    """
-    src_dir = repo_path / "src"
-    if not src_dir.is_dir():
-        return "."
-
-    if _pyproject_uses_src_layout(repo_path / "pyproject.toml"):
-        return "src/"
-
-    top_level_packages = [
-        child
-        for child in repo_path.iterdir()
-        if child.is_dir() and (child / "__init__.py").is_file()
-    ]
-    if top_level_packages:
-        return "."
-
-    return "src/"
-
-
-def _pyproject_uses_src_layout(pyproject_path: Path) -> bool:
-    """Return True when pyproject explicitly declares src package discovery."""
-    if not pyproject_path.is_file():
-        return False
-
-    try:
-        data = tomllib.loads(pyproject_path.read_text())
-    except (OSError, tomllib.TOMLDecodeError):
-        return False
-
-    tool = data.get("tool")
-    if not isinstance(tool, dict):
-        return False
-
-    setuptools = tool.get("setuptools")
-    if isinstance(setuptools, dict):
-        packages = setuptools.get("packages")
-        if isinstance(packages, dict):
-            find = packages.get("find")
-            if isinstance(find, dict):
-                where = find.get("where")
-                if _is_src_layout_value(where):
-                    return True
-
-    hatch = tool.get("hatch")
-    if isinstance(hatch, dict):
-        build = hatch.get("build")
-        if isinstance(build, dict):
-            targets = build.get("targets")
-            if isinstance(targets, dict):
-                wheel = targets.get("wheel")
-                if isinstance(wheel, dict):
-                    packages = wheel.get("packages")
-                    if _is_src_layout_value(packages):
-                        return True
-
-    return False
-
-
-def _is_src_layout_value(value: object) -> bool:
-    """Return True for common pyproject spellings of a src layout."""
-    if value == "src":
-        return True
-    return isinstance(value, list) and value == ["src"]
-
-
-def _python_typecheck_step(repo_path: Path) -> str:
-    target = _python_typecheck_target(repo_path)
-    return f"""\
+_PYTHON_TYPECHECK_STEP = dedent("""\
       - name: Type check (pyright)
         run: |
           pip install pyright
-          pyright {target}"""
+          pyright src/""")
 
-_TS_TYPECHECK_STEP = """\
+_TS_TYPECHECK_STEP = dedent("""\
       - name: Type check (tsc)
         run: |
           npm ci
-          npx tsc --noEmit"""
+          npx tsc --noEmit""")
 
 
 def _lint_step(stack: Stack) -> str | None:
@@ -240,14 +141,14 @@ def _test_step(stack: Stack) -> str | None:
     return None
 
 
-def _typecheck_step(stack: Stack, repo_path: Path) -> str | None:
+def _typecheck_step(stack: Stack) -> str | None:
     """Generate type-check step YAML for the given stack."""
     if stack == Stack.PYTHON:
-        return _python_typecheck_step(repo_path)
+        return _PYTHON_TYPECHECK_STEP
     if stack == Stack.TYPESCRIPT:
         return _TS_TYPECHECK_STEP
     if stack == Stack.HYBRID:
-        return f"{_python_typecheck_step(repo_path)}\n{_TS_TYPECHECK_STEP}"
+        return f"{_PYTHON_TYPECHECK_STEP}\n{_TS_TYPECHECK_STEP}"
     return None
 
 
@@ -259,40 +160,34 @@ _PYTHON_VERSION = "3.11"
 _NODE_VERSION = "20"
 
 
-def _wrap_workflow(
-    repo_name: str,
-    stack: Stack,
-    steps_block: str,
-    *,
-    workflow_name: str = "CI",
-) -> str:
+def _wrap_workflow(repo_name: str, stack: Stack, steps_block: str) -> str:
     """Wrap step snippets in a complete GitHub Actions workflow."""
     setup_lines: list[str] = []
 
     if stack in (Stack.PYTHON, Stack.HYBRID):
-        setup_lines.append(f"""\
+        setup_lines.append(dedent(f"""\
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "{_PYTHON_VERSION}"
       - name: Install Python dependencies
-        run: pip install -e ".[dev]" """.rstrip())
+        run: pip install -e ".[dev]" """))
 
     if stack in (Stack.TYPESCRIPT, Stack.HYBRID):
-        setup_lines.append(f"""\
+        setup_lines.append(dedent(f"""\
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "{_NODE_VERSION}"
       - name: Install Node dependencies
-        run: npm ci""")
+        run: npm ci"""))
 
     setup_block = "\n".join(setup_lines)
 
     return dedent(f"""\
 # CI workflow for {repo_name}
 # Generated by: organvm ci scaffold {repo_name}
-name: {workflow_name}
+name: CI
 
 on:
   push:
@@ -343,6 +238,6 @@ def scaffold_repo(
     if test:
         result.test_yaml = _test_step(stack)
     if typecheck:
-        result.typecheck_yaml = _typecheck_step(stack, repo_path)
+        result.typecheck_yaml = _typecheck_step(stack)
 
     return result

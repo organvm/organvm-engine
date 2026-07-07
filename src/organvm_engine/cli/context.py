@@ -45,34 +45,7 @@ def cmd_context_sync(args: argparse.Namespace) -> int:
         for e in result["errors"]:
             print(f"    - {e['path']}: {e['error']}")
 
-    changes = result.get("changelog") or result.get("changes") or []
-    if changes:
-        print("\nChangelog")
-        print("─" * 40)
-        for change in changes:
-            marker = _change_marker(change.get("action", "updated"))
-            print(
-                f"  {marker} {change['path']} "
-                f"(+{change.get('added_lines', 0)}/-{change.get('removed_lines', 0)})",
-            )
-
-    if getattr(args, "diff", False) and changes:
-        print("\nDiff")
-        print("─" * 40)
-        for change in changes:
-            diff = change.get("diff")
-            if diff:
-                print(diff)
-
     if result.get("dry_run"):
         print("\n[DRY RUN] No files were modified.")
 
     return 1 if result["errors"] else 0
-
-
-def _change_marker(action: str) -> str:
-    if action == "created":
-        return "A"
-    if action == "updated":
-        return "M"
-    return "?"

@@ -1,6 +1,5 @@
 """Tests for ci/scaffold.py — CI workflow YAML generation."""
 
-from argparse import Namespace
 from pathlib import Path
 
 import pytest
@@ -10,7 +9,6 @@ from organvm_engine.ci.scaffold import (
     detect_stack,
     scaffold_repo,
 )
-from organvm_engine.cli.ci import _requested_scaffold_capabilities
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -146,8 +144,6 @@ class TestScaffoldRepo:
         assert result.lint_yaml is None
         assert result.test_yaml is None
         assert result.typecheck_yaml is not None
-        assert result.workflow_name() == "Type Check"
-        assert result.workflow_filename() == "type-check.yml"
 
     def test_unknown_stack_returns_none_steps(self, empty_repo: Path):
         result = scaffold_repo(empty_repo, "empty")
@@ -164,26 +160,6 @@ class TestScaffoldRepo:
         assert result.test_yaml is None
         assert result.typecheck_yaml is None
 
-    def test_python_src_layout_typechecks_src(self, python_repo: Path):
-        result = scaffold_repo(
-            python_repo, "test", lint=False, test=False, typecheck=True,
-        )
-        assert "pyright src/" in result.typecheck_yaml
-
-    def test_python_flat_layout_typechecks_repo_root(self, tmp_path: Path):
-        repo = tmp_path / "flat-python"
-        repo.mkdir()
-        (repo / "pyproject.toml").write_text('[project]\nname = "flat"')
-        package = repo / "flat_package"
-        package.mkdir()
-        (package / "__init__.py").write_text("")
-
-        result = scaffold_repo(
-            repo, "flat-python", lint=False, test=False, typecheck=True,
-        )
-
-        assert "pyright ." in result.typecheck_yaml
-
 
 # ---------------------------------------------------------------------------
 # Combined workflow output
@@ -199,9 +175,6 @@ class TestCombinedYaml:
         assert "ruff check" in combined
         assert "pytest" in combined
         assert "pyright" in combined
-        assert "\n      - name: Set up Python" in combined
-        assert "\n      - name: Type check (pyright)" in combined
-        assert "\n- name:" not in combined
 
     def test_typescript_combined_has_node_setup(self, ts_repo: Path):
         result = scaffold_repo(ts_repo, "test-repo")
@@ -230,30 +203,3 @@ class TestCombinedYaml:
         assert "push:" in combined
         assert "pull_request:" in combined
         assert "branches: [main]" in combined
-
-    def test_typecheck_only_combined_uses_typecheck_workflow_name(self, python_repo: Path):
-        result = scaffold_repo(
-            python_repo, "test-repo", lint=False, test=False, typecheck=True,
-        )
-        combined = result.combined_yaml()
-        assert "name: Type Check" in combined
-        assert "ruff check" not in combined
-        assert "pytest" not in combined
-
-
-# ---------------------------------------------------------------------------
-# CLI capability resolution
-# ---------------------------------------------------------------------------
-
-class TestScaffoldCliCapabilities:
-    def test_no_specific_flags_defaults_to_all(self):
-        args = Namespace(lint=False, test=False, typecheck=False, all=False)
-        assert _requested_scaffold_capabilities(args) == (True, True, True)
-
-    def test_typecheck_flag_is_typecheck_only(self):
-        args = Namespace(lint=False, test=False, typecheck=True, all=False)
-        assert _requested_scaffold_capabilities(args) == (False, False, True)
-
-    def test_all_overrides_specific_flags(self):
-        args = Namespace(lint=False, test=False, typecheck=True, all=True)
-        assert _requested_scaffold_capabilities(args) == (True, True, True)

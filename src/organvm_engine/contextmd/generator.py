@@ -22,7 +22,6 @@ from organvm_engine.contextmd.templates import (
     ATOMS_NOT_RUN_HINT,
     ATOMS_REPO_QUEUE_SECTION,
     ECOSYSTEM_STATUS_SECTION,
-    HANDOFF_STATUS_SECTION,
     LOGOS_SECTION,
     NETWORK_STATUS_SECTION,
     ONTOLOGIA_STATUS_SECTION,
@@ -50,7 +49,6 @@ def generate_repo_section(
     plan_index: "PlanIndex | None" = None,
     sop_entries: list | None = None,
     agent: str | None = None,
-    repo_path: str | None = None,
 ) -> str:
     """Generate the auto-generated section for a repo-level CLAUDE.md / GEMINI.md."""
 
@@ -127,11 +125,7 @@ def generate_repo_section(
         ecosystem_section = _build_ecosystem_context(repo_name, organ_key)
         network_section = _build_network_context(repo_name, organ_key)
         ontologia_section = _build_ontologia_context(repo_name)
-        handoff_status_section = _build_handoff_status_context(repo_path)
-        injected = ""
-        if handoff_status_section:
-            injected += handoff_status_section
-        injected += SESSION_REVIEW_SECTION
+        injected = SESSION_REVIEW_SECTION
         if system_library_section:
             injected += "\n" + system_library_section
         if sop_section:
@@ -452,38 +446,6 @@ def _build_sop_directives(sop_entries: list | None) -> str:
         directives_table=table,
         linked_skills_line=skills_line,
     )
-
-
-def _build_handoff_status_context(repo_path: str | None) -> str:
-    """Build a repo-local handoff status section when an active handoff exists."""
-    if not repo_path:
-        return ""
-
-    try:
-        from organvm_engine.handoff import format_age, inspect_repo_handoff
-
-        info = inspect_repo_handoff(repo_path)
-    except Exception:
-        return ""
-    if info is None:
-        return ""
-
-    created = info.created_at.isoformat().replace("+00:00", "Z") if info.created_at else "missing"
-    expires = info.expires_at.isoformat().replace("+00:00", "Z") if info.expires_at else "missing"
-    lines = [
-        (
-            f"- `.conductor/active-handoff.md`: **{info.status.upper()}** "
-            f"(age {format_age(info.age)}; created_at {created}; expires_at {expires})"
-        ),
-    ]
-    if not info.metadata_complete:
-        lines.append("- Metadata incomplete: add `created_at` and `expires_at` to the handoff.")
-    if info.status in {"stale", "expired"}:
-        lines.append("- Warning: verify constraints before relying on this handoff.")
-    if info.reasons:
-        lines.append(f"- Reason: {'; '.join(info.reasons)}")
-
-    return HANDOFF_STATUS_SECTION.format(handoff_status="\n".join(lines))
 
 
 def _build_plan_context(

@@ -11,8 +11,6 @@ Preserves all manually-written content outside the AUTO markers.
 
 from __future__ import annotations
 
-import difflib
-import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -89,7 +87,6 @@ def sync_all(
     created = []
     skipped = []
     errors = []
-    changes = []
 
     target_organs = organs or list(REGISTRY_KEY_MAP.keys())
 
@@ -106,8 +103,13 @@ def sync_all(
             for filename in ["CLAUDE.md", "GEMINI.md", "AGENTS.md"]:
                 try:
                     organ_section = generate_organ_section(organ_key, reg, all_seeds)
-                    res = _inject_section_result(organ_path / filename, organ_section, dry_run)
-                    _record_sync_result(res, updated, created, skipped, changes)
+                    action = _inject_section(organ_path / filename, organ_section, dry_run)
+                    if action == "created":
+                        created.append(str(organ_path / filename))
+                    elif action == "updated":
+                        updated.append(str(organ_path / filename))
+                    else:
+                        skipped.append(str(organ_path / filename))
                 except Exception as e:
                     errors.append({"path": str(organ_path / filename), "error": str(e)})
 
@@ -128,7 +130,6 @@ def sync_all(
                     updated=updated,
                     created=created,
                     skipped=skipped,
-                    changes=changes,
                     errors=errors,
                     promotion_to_phase=promotion_to_phase,
                     resolve_all_sops=resolve_all_sops,
@@ -156,7 +157,6 @@ def sync_all(
                     updated=updated,
                     created=created,
                     skipped=skipped,
-                    changes=changes,
                     errors=errors,
                     promotion_to_phase=promotion_to_phase,
                     resolve_all_sops=resolve_all_sops,
@@ -166,8 +166,13 @@ def sync_all(
     for filename in ["CLAUDE.md", "GEMINI.md", "AGENTS.md"]:
         try:
             ws_section = generate_workspace_section(reg, all_seeds)
-            res = _inject_section_result(ws / filename, ws_section, dry_run)
-            _record_sync_result(res, updated, created, skipped, changes)
+            action = _inject_section(ws / filename, ws_section, dry_run)
+            if action == "created":
+                created.append(str(ws / filename))
+            elif action == "updated":
+                updated.append(str(ws / filename))
+            else:
+                skipped.append(str(ws / filename))
         except Exception as e:
             errors.append({"path": str(ws / filename), "error": str(e)})
 
@@ -177,8 +182,6 @@ def sync_all(
         "skipped": skipped,
         "errors": errors,
         "dry_run": dry_run,
-        "changes": changes,
-        "changelog": changes,
     }
 
     # Emit context sync event
@@ -193,7 +196,6 @@ def sync_all(
                 payload={
                     "updated_count": len(updated),
                     "created_count": len(created),
-                    "changed_count": len(changes),
                     "error_count": len(errors),
                 },
             )
@@ -210,7 +212,6 @@ def sync_all(
             payload={
                 "updated": len(updated),
                 "created": len(created),
-                "changed": len(changes),
                 "errors": len(errors),
             },
         )
@@ -260,7 +261,6 @@ def _sync_repo_context_files(
     updated: list[str],
     created: list[str],
     skipped: list[str],
-    changes: list[dict[str, Any]] | None = None,
     errors: list[dict[str, str]],
     promotion_to_phase,
     resolve_all_sops,
@@ -288,7 +288,12 @@ def _sync_repo_context_files(
                 filename=filename,
                 sop_entries=repo_sops,
             )
-            _record_sync_result(res, updated, created, skipped, changes)
+            if res["action"] == "created":
+                created.append(res["path"])
+            elif res["action"] == "updated":
+                updated.append(res["path"])
+            else:
+                skipped.append(res["path"])
         except Exception as e:
             errors.append({"path": str(repo_path / filename), "error": str(e)})
 
@@ -296,8 +301,13 @@ def _sync_repo_context_files(
         agents_section = generate_agents_section(
             repo_name, org_name, registry, repo_to_seed.get(repo_name),
         )
-        res = _inject_section_result(repo_path / "AGENTS.md", agents_section, dry_run)
-        _record_sync_result(res, updated, created, skipped, changes)
+        action = _inject_section(repo_path / "AGENTS.md", agents_section, dry_run)
+        if action == "created":
+            created.append(str(repo_path / "AGENTS.md"))
+        elif action == "updated":
+            updated.append(str(repo_path / "AGENTS.md"))
+        else:
+            skipped.append(str(repo_path / "AGENTS.md"))
     except Exception as e:
         errors.append({"path": str(repo_path / "AGENTS.md"), "error": str(e)})
 
@@ -315,47 +325,20 @@ def sync_repo(
     """Sync a single repo's context file."""
     agent = filename.replace(".md", "").lower() if filename else None
     section = generate_repo_section(
-        repo_name,
-        org,
-        registry,
-        seed,
-        sop_entries=sop_entries,
-        agent=agent,
-        repo_path=str(repo_path),
+        repo_name, org, registry, seed, sop_entries=sop_entries, agent=agent,
     )
     file_path = repo_path / filename
-    res = _inject_section_result(file_path, section, dry_run)
-    return {
-        "path": res["path"],
-        "action": res["action"],
-        "dry_run": dry_run,
-        "change": res.get("change"),
-    }
+    action = _inject_section(file_path, section, dry_run)
+    return {"path": str(file_path), "action": action, "dry_run": dry_run}
 
 
 def _inject_section(file_path: Path, new_section: str, dry_run: bool = False) -> str:
     """Inject or replace the auto-generated section in a markdown file."""
-    return _inject_section_result(file_path, new_section, dry_run)["action"]
-
-
-def _inject_section_result(
-    file_path: Path,
-    new_section: str,
-    dry_run: bool = False,
-) -> dict[str, Any]:
-    """Inject or replace the auto-generated section and describe the generated diff."""
     import re
-
     if not file_path.exists():
-        change = _build_change_record(file_path, "created", "", new_section)
         if not dry_run:
             file_path.write_text(new_section + "\n")
-        return {
-            "path": str(file_path),
-            "action": "created",
-            "dry_run": dry_run,
-            "change": change,
-        }
+        return "created"
 
     content = file_path.read_text()
 
@@ -378,100 +361,14 @@ def _inject_section_result(
         # Replace existing section. Using greedy match '.*' instead of '.*?' to ensure
         # that if multiple START/END blocks exist, the entire range is collapsed.
         pattern = re.escape(AUTO_START) + r".*" + re.escape(AUTO_END)
-        match = re.search(pattern, content, flags=re.DOTALL)
-        old_section = match.group(0) if match else ""
         new_content = re.sub(pattern, new_section, content, flags=re.DOTALL)
         if new_content == content:
-            return {
-                "path": str(file_path),
-                "action": "unchanged",
-                "dry_run": dry_run,
-                "change": None,
-            }
+            return "unchanged"
         if not dry_run:
             file_path.write_text(new_content)
-        return {
-            "path": str(file_path),
-            "action": "updated",
-            "dry_run": dry_run,
-            "change": _build_change_record(file_path, "updated", old_section, new_section),
-        }
-
+        return "updated"
     # Append to end
     new_content = content.rstrip() + "\n\n" + new_section + "\n"
     if not dry_run:
         file_path.write_text(new_content)
-    return {
-        "path": str(file_path),
-        "action": "updated",
-        "dry_run": dry_run,
-        "change": _build_change_record(file_path, "updated", "", new_section),
-    }
-
-
-def _record_sync_result(
-    res: dict[str, Any],
-    updated: list[str],
-    created: list[str],
-    skipped: list[str],
-    changes: list[dict[str, Any]] | None,
-) -> None:
-    """Route an injection result into sync counters and changelog entries."""
-    action = res["action"]
-    path = res["path"]
-    if action == "created":
-        created.append(path)
-    elif action == "updated":
-        updated.append(path)
-    else:
-        skipped.append(path)
-
-    change = res.get("change")
-    if change and changes is not None:
-        changes.append(change)
-
-
-def _build_change_record(
-    file_path: Path,
-    action: str,
-    old_section: str,
-    new_section: str,
-) -> dict[str, Any]:
-    """Build a compact changelog record for one generated context section."""
-    old_lines = old_section.splitlines()
-    new_lines = new_section.splitlines()
-    diff_lines = list(
-        difflib.unified_diff(
-            old_lines,
-            new_lines,
-            fromfile=f"{file_path}:before",
-            tofile=f"{file_path}:after",
-            lineterm="",
-        ),
-    )
-    added = sum(
-        1
-        for line in diff_lines
-        if line.startswith("+") and not line.startswith("+++")
-    )
-    removed = sum(
-        1
-        for line in diff_lines
-        if line.startswith("-") and not line.startswith("---")
-    )
-
-    return {
-        "path": str(file_path),
-        "action": action,
-        "added_lines": added,
-        "removed_lines": removed,
-        "before_hash": _section_hash(old_section),
-        "after_hash": _section_hash(new_section),
-        "diff": "\n".join(diff_lines),
-    }
-
-
-def _section_hash(section: str) -> str | None:
-    if not section:
-        return None
-    return hashlib.sha256(section.encode("utf-8")).hexdigest()[:12]
+    return "updated"

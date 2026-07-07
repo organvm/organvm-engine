@@ -14,7 +14,6 @@ pip install -e .
 # Registry
 organvm registry show recursive-engine--generative-entity
 organvm registry list --organ ORGAN-I --tier flagship
-organvm registry list --format json
 organvm registry validate
 organvm registry update <repo> <field> <value>
 

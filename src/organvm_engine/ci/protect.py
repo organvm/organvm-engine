@@ -17,8 +17,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from organvm_engine.ci.audit import _is_docs_only
-
 
 @dataclass
 class ProtectionPayload:
@@ -52,10 +50,7 @@ class ProtectionPayload:
 
     def to_gh_command(self) -> str:
         """Generate the full ``gh api`` command string."""
-        endpoint = (
-            f"repos/{self.org}/{self.repo_name}/"
-            f"branches/{self.branch}/protection"
-        )
+        endpoint = f"repos/{self.org}/{self.repo_name}/branches/{self.branch}/protection"
         payload_json = json.dumps(self.to_api_json(), indent=2)
         return (
             f"gh api -X PUT \"{endpoint}\" "
@@ -63,15 +58,11 @@ class ProtectionPayload:
         )
 
     def to_dict(self) -> dict:
-        endpoint = (
-            f"repos/{self.org}/{self.repo_name}/"
-            f"branches/{self.branch}/protection"
-        )
         return {
             "org": self.org,
             "repo": self.repo_name,
             "branch": self.branch,
-            "endpoint": endpoint,
+            "endpoint": f"repos/{self.org}/{self.repo_name}/branches/{self.branch}/protection",
             "payload": self.to_api_json(),
             "command": self.to_gh_command(),
         }
@@ -186,14 +177,6 @@ def plan_branch_protection(
                 plan.skipped.append({
                     "repo": f"{org_name}/{repo_name}",
                     "reason": "archived",
-                })
-                continue
-
-            # Skip docs-only repos
-            if _is_docs_only(repo_name, None):
-                plan.skipped.append({
-                    "repo": f"{org_name}/{repo_name}",
-                    "reason": "docs-only",
                 })
                 continue
 

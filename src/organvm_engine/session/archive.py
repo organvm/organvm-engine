@@ -375,12 +375,24 @@ def archive_all(
 
     results: list[ArchiveResult] = []
     for session_path, _meta in unarchived:
-        result = archive_session(
-            session_path,
-            dry_run=dry_run,
-            include_raw=include_raw,
-            force=force,
-        )
+        # One bad session (corrupt transcript, unmounted volume in its
+        # recorded project path, permission error) must not abort the
+        # whole batch — capture it in ArchiveResult.error and continue.
+        try:
+            result = archive_session(
+                session_path,
+                dry_run=dry_run,
+                include_raw=include_raw,
+                force=force,
+            )
+        except Exception as exc:  # noqa: BLE001
+            result = ArchiveResult(
+                session_id=_meta.session_id,
+                project_path=Path(),
+                archive_dir=Path(),
+                files_written=[],
+                error=f"{type(exc).__name__}: {exc}",
+            )
         results.append(result)
 
     return results

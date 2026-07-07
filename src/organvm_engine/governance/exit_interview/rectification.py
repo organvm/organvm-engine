@@ -35,7 +35,6 @@ from organvm_engine.governance.exit_interview.schemas import (
     Testimony,
     Verdict,
 )
-from organvm_engine.governance.exit_interview.testimony import _DOC_SUFFIXES
 
 # ---------------------------------------------------------------------------
 # Actuality checks
@@ -66,19 +65,12 @@ def _check_existence_actuality(
 
     if fs_path.exists():
         if fs_path.is_dir():
-            # Count Python source; fall back to documentation files for
-            # doc-only trees so the actuality matches the prose testimony.
             py_files = list(fs_path.rglob("*.py"))
-            files = py_files or [
-                p for p in fs_path.rglob("*")
-                if p.is_file() and p.suffix.lower() in _DOC_SUFFIXES
-            ]
-            kind = "files" if py_files else "doc files"
             total_lines = 0
-            for f in files:
+            for f in py_files:
                 with contextlib.suppress(OSError, UnicodeDecodeError):
                     total_lines += len(f.read_text(encoding="utf-8").splitlines())
-            return f"exists, {len(files)} {kind}, {total_lines} lines"
+            return f"exists, {len(py_files)} files, {total_lines} lines"
         try:
             lines = len(fs_path.read_text(encoding="utf-8").splitlines())
         except (OSError, UnicodeDecodeError):

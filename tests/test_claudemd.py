@@ -59,9 +59,9 @@ class TestGenerator:
 
 
 class TestSync:
-    @patch("organvm_engine.contextmd.sync._inject_section_result")
+    @patch("organvm_engine.contextmd.sync._inject_section")
     def test_sync_repo(self, mock_inject, mock_registry):
-        mock_inject.return_value = {"path": "/tmp/CLAUDE.md", "action": "updated", "change": None}
+        mock_inject.return_value = "updated"
         res = sync_repo(Path("/tmp"), "repo-a", "org", mock_registry)
         assert res["action"] == "updated"
         assert "CLAUDE.md" in res["path"]

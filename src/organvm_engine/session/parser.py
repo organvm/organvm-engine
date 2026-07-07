@@ -11,8 +11,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from organvm_engine.coordination.lifecycle import build_conductor_ritual_metadata
-
 CLAUDE_PROJECTS_DIR = Path.home() / ".claude" / "projects"
 
 
@@ -56,7 +54,7 @@ def _read_cwd_from_project(proj_dir: Path) -> str:
     """
     for jsonl in proj_dir.glob("*.jsonl"):
         try:
-            with jsonl.open(encoding="utf-8") as f:
+            with jsonl.open(encoding="utf-8", errors="replace") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -132,7 +130,7 @@ def parse_session(jsonl_path: Path) -> SessionMeta | None:
     first_human = ""
 
     try:
-        with jsonl_path.open(encoding="utf-8") as f:
+        with jsonl_path.open(encoding="utf-8", errors="replace") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -142,6 +140,8 @@ def parse_session(jsonl_path: Path) -> SessionMeta | None:
                 except json.JSONDecodeError:
                     continue
 
+                if not isinstance(msg, dict):
+                    continue
                 msg_type = msg.get("type", "")
 
                 # Extract session metadata from first user/assistant message
@@ -235,16 +235,6 @@ class SessionExport:
         if len(first_msg) > 200:
             first_msg = first_msg[:200] + "..."
 
-        ritual = build_conductor_ritual_metadata(
-            phase="DONE",
-            appetite_minutes=self.meta.duration_minutes,
-            micro_spec={"outcome": first_msg},
-        )
-        lifecycle = " -> ".join(ritual["conductor_lifecycle"])
-        ritual_sequence = " -> ".join(stage.title() for stage in ritual["conductor_ritual"])
-        appetite = ritual["score"]["appetite_minutes"]
-        appetite_value = str(appetite) if appetite is not None else "unknown"
-
         return f"""# Session Review: {date} -- {self.slug}
 
 **Date:** {date}
@@ -270,22 +260,6 @@ organvm session prompts {short_id}
 ```
 
 **Source JSONL:** `{self.meta.file_path}`
-
----
-
-## Conductor Ritual Metadata
-
-| Field | Value |
-|-------|-------|
-| schema_version | `{ritual["schema_version"]}` |
-| conductor_lifecycle | `{lifecycle}` |
-| conductor_ritual | `{ritual_sequence}` |
-| conductor_phase | `{ritual["conductor_phase"]}` |
-| conductor_ritual_stage | `{ritual["conductor_ritual_stage"]}` |
-| appetite_minutes | `{appetite_value}` |
-| micro_spec.outcome | {first_msg or "[TODO]"} |
-| regression_detected | `not-recorded` |
-| postmortem_required | `{ritual["perform"]["postmortem_required"]}` |
 
 ---
 
@@ -438,7 +412,7 @@ def render_prompts(jsonl_path: Path) -> str:
     pending_actions: list[str] = []
     prompt_texts: list[str] = []  # for pattern summary
 
-    with jsonl_path.open(encoding="utf-8") as f:
+    with jsonl_path.open(encoding="utf-8", errors="replace") as f:
         for raw_line in f:
             raw_line = raw_line.strip()
             if not raw_line:
@@ -448,6 +422,8 @@ def render_prompts(jsonl_path: Path) -> str:
             except json.JSONDecodeError:
                 continue
 
+            if not isinstance(msg, dict):
+                continue
             msg_type = msg.get("type", "")
 
             if msg_type == "assistant":
@@ -574,7 +550,7 @@ def render_transcript(jsonl_path: Path) -> str:
     lines.append("")
 
     turn = 0
-    with jsonl_path.open(encoding="utf-8") as f:
+    with jsonl_path.open(encoding="utf-8", errors="replace") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -584,6 +560,8 @@ def render_transcript(jsonl_path: Path) -> str:
             except json.JSONDecodeError:
                 continue
 
+            if not isinstance(msg, dict):
+                continue
             msg_type = msg.get("type", "")
 
             if msg_type == "user":
@@ -740,7 +718,7 @@ def render_transcript_unabridged(jsonl_path: Path) -> str:
     lines.append("")
 
     msg_num = 0
-    with jsonl_path.open(encoding="utf-8") as f:
+    with jsonl_path.open(encoding="utf-8", errors="replace") as f:
         for raw_line in f:
             raw_line = raw_line.strip()
             if not raw_line:
@@ -750,6 +728,8 @@ def render_transcript_unabridged(jsonl_path: Path) -> str:
             except json.JSONDecodeError:
                 continue
 
+            if not isinstance(entry, dict):
+                continue
             etype = entry.get("type", "")
             ts_str = entry.get("timestamp", "")
             ts_short = ts_str[11:19] if len(ts_str) >= 19 else ""
@@ -866,7 +846,7 @@ def render_transcript_unabridged(jsonl_path: Path) -> str:
 def parse_gemini_session(json_path: Path) -> SessionMeta | None:
     """Parse a Gemini CLI session JSON into SessionMeta."""
     try:
-        with json_path.open(encoding="utf-8") as f:
+        with json_path.open(encoding="utf-8", errors="replace") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
         return None
@@ -925,7 +905,7 @@ def parse_gemini_session(json_path: Path) -> SessionMeta | None:
 def render_gemini_transcript(json_path: Path, unabridged: bool = False) -> str:
     """Render a Gemini session as readable markdown."""
     try:
-        with json_path.open(encoding="utf-8") as f:
+        with json_path.open(encoding="utf-8", errors="replace") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
         return ""
@@ -1070,7 +1050,7 @@ def render_gemini_prompts(json_path: Path) -> str:
         return ""
 
     try:
-        with json_path.open(encoding="utf-8") as f:
+        with json_path.open(encoding="utf-8", errors="replace") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
         return ""
@@ -1168,7 +1148,7 @@ def parse_codex_session(jsonl_path: Path) -> SessionMeta | None:
     first_human = ""
 
     try:
-        with jsonl_path.open(encoding="utf-8") as f:
+        with jsonl_path.open(encoding="utf-8", errors="replace") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -1178,6 +1158,8 @@ def parse_codex_session(jsonl_path: Path) -> SessionMeta | None:
                 except json.JSONDecodeError:
                     continue
 
+                if not isinstance(entry, dict):
+                    continue
                 ts_str = entry.get("timestamp")
                 if ts_str:
                     ts = _parse_iso_ts(ts_str)
@@ -1255,7 +1237,7 @@ def render_codex_transcript(jsonl_path: Path, unabridged: bool = False) -> str:
     ]
 
     msg_num = 0
-    with jsonl_path.open(encoding="utf-8") as f:
+    with jsonl_path.open(encoding="utf-8", errors="replace") as f:
         for raw_line in f:
             raw_line = raw_line.strip()
             if not raw_line:
@@ -1265,6 +1247,8 @@ def render_codex_transcript(jsonl_path: Path, unabridged: bool = False) -> str:
             except json.JSONDecodeError:
                 continue
 
+            if not isinstance(entry, dict):
+                continue
             etype = entry.get("type", "")
             ts_str = entry.get("timestamp", "")
             ts_short = ts_str[11:19] if len(ts_str) >= 19 else ""
@@ -1481,7 +1465,7 @@ def extract_human_texts(jsonl_path: Path) -> list[str]:
     texts: list[str] = []
 
     try:
-        fh = jsonl_path.open(encoding="utf-8")
+        fh = jsonl_path.open(encoding="utf-8", errors="replace")
     except OSError:
         return texts
 

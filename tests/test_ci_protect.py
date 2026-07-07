@@ -123,22 +123,6 @@ class TestPlanBranchProtection:
         assert "local-repo" not in repo_names
         assert "candidate-repo" not in repo_names
 
-    def test_docs_only_repos_are_skipped(self, registry_with_graduated):
-        # Add a docs-only repo to the registry
-        registry_with_graduated["organs"]["ORGAN-I"]["repositories"].append({
-            "name": ".github",
-            "org": "organvm-i-theoria",
-            "promotion_status": "GRADUATED",
-            "tier": "standard",
-        })
-        plan = plan_branch_protection(registry_with_graduated)
-
-        repo_names = {p.repo_name for p in plan.repos}
-        assert ".github" not in repo_names
-
-        skip_reasons = {s["repo"]: s["reason"] for s in plan.skipped}
-        assert skip_reasons.get("organvm-i-theoria/.github") == "docs-only"
-
     def test_already_protected_repos_excluded(self, registry_with_graduated):
         plan = plan_branch_protection(registry_with_graduated)
         # organvm-engine is in _ALREADY_PROTECTED

@@ -48,7 +48,6 @@ def test_sync_all_updates_repo_in_additional_flat_workspace_root(tmp_path, monke
 
     assert result["errors"] == []
     assert str(claude_md) in result["updated"]
-    assert any(change["path"] == str(claude_md) for change in result["changelog"])
     assert AUTO_START in content
     assert "recursive-engine" in content
     assert "**Produces**" in content

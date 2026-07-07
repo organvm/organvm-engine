@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from organvm_engine.coordination.lifecycle import build_conductor_ritual_metadata
+
 CLAUDE_PROJECTS_DIR = Path.home() / ".claude" / "projects"
 
 
@@ -233,6 +235,16 @@ class SessionExport:
         if len(first_msg) > 200:
             first_msg = first_msg[:200] + "..."
 
+        ritual = build_conductor_ritual_metadata(
+            phase="DONE",
+            appetite_minutes=self.meta.duration_minutes,
+            micro_spec={"outcome": first_msg},
+        )
+        lifecycle = " -> ".join(ritual["conductor_lifecycle"])
+        ritual_sequence = " -> ".join(stage.title() for stage in ritual["conductor_ritual"])
+        appetite = ritual["score"]["appetite_minutes"]
+        appetite_value = str(appetite) if appetite is not None else "unknown"
+
         return f"""# Session Review: {date} -- {self.slug}
 
 **Date:** {date}
@@ -258,6 +270,22 @@ organvm session prompts {short_id}
 ```
 
 **Source JSONL:** `{self.meta.file_path}`
+
+---
+
+## Conductor Ritual Metadata
+
+| Field | Value |
+|-------|-------|
+| schema_version | `{ritual["schema_version"]}` |
+| conductor_lifecycle | `{lifecycle}` |
+| conductor_ritual | `{ritual_sequence}` |
+| conductor_phase | `{ritual["conductor_phase"]}` |
+| conductor_ritual_stage | `{ritual["conductor_ritual_stage"]}` |
+| appetite_minutes | `{appetite_value}` |
+| micro_spec.outcome | {first_msg or "[TODO]"} |
+| regression_detected | `not-recorded` |
+| postmortem_required | `{ritual["perform"]["postmortem_required"]}` |
 
 ---
 

@@ -246,6 +246,8 @@ class TestRenderDebrief:
         md = render_debrief(debrief)
         assert "# Session Debrief" in md
         assert "## Analysis" in md
+        assert "## Conductor Ritual" in md
+        assert "Score -> Rehearse -> Perform" in md
         assert "## To-Dos" in md
 
     def test_renders_file_lists(self, sample_session: Path):
@@ -277,6 +279,11 @@ class TestToDict:
         assert isinstance(d["small_todos"], list)
         assert d["test_runs"] == 1
         assert d["commits_made"] == 1
+        assert d["conductor_ritual"]["conductor_phase"] == "DONE"
+        assert d["conductor_ritual"]["conductor_ritual_stage"] == "perform"
+        assert d["conductor_ritual"]["rehearse"]["rehearsal_commands"] == [
+            "pytest organvm-engine/tests/ -v",
+        ]
 
 
 class TestHelpers:

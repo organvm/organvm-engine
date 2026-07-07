@@ -55,6 +55,234 @@ def valid_transition(current: AgentPhase, target: AgentPhase) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Conductor lifecycle and Score -> Rehearse -> Perform ritual
+# ---------------------------------------------------------------------------
+
+class ConductorPhase(str, enum.Enum):
+    """Canonical Conductor lifecycle phases owned by ORGAN-IV."""
+
+    FRAME = "FRAME"
+    SHAPE = "SHAPE"
+    BUILD = "BUILD"
+    PROVE = "PROVE"
+    DONE = "DONE"
+
+
+class ConductorRitualStage(str, enum.Enum):
+    """The ritual overlay that gates the Conductor lifecycle."""
+
+    SCORE = "score"
+    REHEARSE = "rehearse"
+    PERFORM = "perform"
+
+
+CONDUCTOR_PHASE_ORDER: list[ConductorPhase] = list(ConductorPhase)
+
+CONDUCTOR_PHASE_TRANSITIONS: dict[ConductorPhase, set[ConductorPhase]] = {
+    ConductorPhase.FRAME: {ConductorPhase.SHAPE},
+    ConductorPhase.SHAPE: {ConductorPhase.BUILD},
+    ConductorPhase.BUILD: {ConductorPhase.PROVE},
+    ConductorPhase.PROVE: {ConductorPhase.DONE},
+    ConductorPhase.DONE: set(),
+}
+
+CONDUCTOR_RITUAL_SEQUENCE: list[ConductorRitualStage] = [
+    ConductorRitualStage.SCORE,
+    ConductorRitualStage.REHEARSE,
+    ConductorRitualStage.PERFORM,
+]
+
+CONDUCTOR_PHASE_RITUAL: dict[ConductorPhase, ConductorRitualStage] = {
+    ConductorPhase.FRAME: ConductorRitualStage.SCORE,
+    ConductorPhase.SHAPE: ConductorRitualStage.SCORE,
+    ConductorPhase.BUILD: ConductorRitualStage.REHEARSE,
+    ConductorPhase.PROVE: ConductorRitualStage.REHEARSE,
+    ConductorPhase.DONE: ConductorRitualStage.PERFORM,
+}
+
+
+@dataclass(frozen=True)
+class ConductorRitualGate:
+    """Metadata required at a lifecycle gate."""
+
+    phase: ConductorPhase
+    stage: ConductorRitualStage
+    required_metadata: tuple[str, ...]
+    prompt: str
+    purpose: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "phase": self.phase.value,
+            "ritual_stage": self.stage.value,
+            "required_metadata": list(self.required_metadata),
+            "prompt": self.prompt,
+            "purpose": self.purpose,
+        }
+
+
+CONDUCTOR_RITUAL_GATES: tuple[ConductorRitualGate, ...] = (
+    ConductorRitualGate(
+        phase=ConductorPhase.SHAPE,
+        stage=ConductorRitualStage.SCORE,
+        required_metadata=(
+            "appetite_minutes",
+            "micro_spec.outcome",
+            "micro_spec.non_goals",
+            "micro_spec.acceptance_checks",
+        ),
+        prompt="Score the work before BUILD: appetite, outcome, non-goals, checks.",
+        purpose="Prevents open-ended implementation before the problem is shaped.",
+    ),
+    ConductorRitualGate(
+        phase=ConductorPhase.PROVE,
+        stage=ConductorRitualStage.REHEARSE,
+        required_metadata=(
+            "rehearsal_commands",
+            "test_obligations",
+        ),
+        prompt="Rehearse the change before DONE: enumerate and run verification.",
+        purpose="Turns deferred test obligations into an explicit proof pass.",
+    ),
+    ConductorRitualGate(
+        phase=ConductorPhase.DONE,
+        stage=ConductorRitualStage.PERFORM,
+        required_metadata=(
+            "regression_detected",
+            "postmortem_required",
+            "session_export.conductor_ritual",
+        ),
+        prompt="Perform the close-out: regression result, postmortem if needed, export.",
+        purpose="Makes the final session artifact carry the ritual metadata.",
+    ),
+)
+
+
+def normalise_conductor_phase(phase: ConductorPhase | str) -> ConductorPhase:
+    """Return a canonical Conductor phase or raise for unknown values."""
+    if isinstance(phase, ConductorPhase):
+        return phase
+    try:
+        return ConductorPhase(str(phase).strip().upper())
+    except ValueError as exc:
+        valid = ", ".join(p.value for p in CONDUCTOR_PHASE_ORDER)
+        raise ValueError(f"Unknown Conductor phase {phase!r}; expected one of: {valid}") from exc
+
+
+def valid_conductor_transition(
+    current: ConductorPhase | str,
+    target: ConductorPhase | str,
+) -> bool:
+    """Return True if *target* is a valid successor of *current*."""
+    current_phase = normalise_conductor_phase(current)
+    target_phase = normalise_conductor_phase(target)
+    return target_phase in CONDUCTOR_PHASE_TRANSITIONS.get(current_phase, set())
+
+
+def conductor_ritual_stage(phase: ConductorPhase | str) -> ConductorRitualStage:
+    """Return the Score/Rehearse/Perform stage for a Conductor phase."""
+    return CONDUCTOR_PHASE_RITUAL[normalise_conductor_phase(phase)]
+
+
+def conductor_ritual_contract() -> dict[str, Any]:
+    """Return the engine-side contract the ORGAN-IV Conductor can consume."""
+    return {
+        "schema_version": "conductor-ritual/v1",
+        "source_issue": "a-organvm/organvm-engine#10",
+        "lifecycle": [phase.value for phase in CONDUCTOR_PHASE_ORDER],
+        "transitions": {
+            phase.value: [target.value for target in sorted(targets, key=CONDUCTOR_PHASE_ORDER.index)]
+            for phase, targets in CONDUCTOR_PHASE_TRANSITIONS.items()
+        },
+        "ritual_sequence": [stage.value for stage in CONDUCTOR_RITUAL_SEQUENCE],
+        "phase_to_ritual": {
+            phase.value: stage.value for phase, stage in CONDUCTOR_PHASE_RITUAL.items()
+        },
+        "gates": {gate.phase.value: gate.to_dict() for gate in CONDUCTOR_RITUAL_GATES},
+        "session_export_metadata": [
+            "conductor_lifecycle",
+            "conductor_ritual",
+            "conductor_phase",
+            "conductor_ritual_stage",
+            "appetite_minutes",
+            "micro_spec",
+            "rehearsal_commands",
+            "test_obligations",
+            "regression_detected",
+            "postmortem_required",
+        ],
+    }
+
+
+def _string_list(value: Any) -> list[str]:
+    """Normalize scalar or iterable metadata into a string list."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        stripped = value.strip()
+        return [stripped] if stripped else []
+    try:
+        return [str(item).strip() for item in value if str(item).strip()]
+    except TypeError:
+        text = str(value).strip()
+        return [text] if text else []
+
+
+def build_conductor_ritual_metadata(
+    *,
+    phase: ConductorPhase | str = ConductorPhase.DONE,
+    appetite_minutes: int | None = None,
+    micro_spec: dict[str, Any] | None = None,
+    outcome: str = "",
+    non_goals: list[str] | tuple[str, ...] | str | None = None,
+    acceptance_checks: list[str] | tuple[str, ...] | str | None = None,
+    rehearsal_commands: list[str] | tuple[str, ...] | str | None = None,
+    test_obligations: list[str] | tuple[str, ...] | str | None = None,
+    regression_detected: bool | None = None,
+    postmortem: str = "",
+) -> dict[str, Any]:
+    """Build serializable Score/Rehearse/Perform metadata for a session artifact."""
+    conductor_phase = normalise_conductor_phase(phase)
+    spec = dict(micro_spec or {})
+    if outcome:
+        spec["outcome"] = outcome
+    if non_goals is not None:
+        spec["non_goals"] = _string_list(non_goals)
+    if acceptance_checks is not None:
+        spec["acceptance_checks"] = _string_list(acceptance_checks)
+
+    spec.setdefault("outcome", "")
+    spec.setdefault("non_goals", [])
+    spec.setdefault("acceptance_checks", [])
+
+    return {
+        "schema_version": "conductor-ritual/v1",
+        "source_issue": "a-organvm/organvm-engine#10",
+        "conductor_lifecycle": [phase.value for phase in CONDUCTOR_PHASE_ORDER],
+        "conductor_ritual": [stage.value for stage in CONDUCTOR_RITUAL_SEQUENCE],
+        "conductor_phase": conductor_phase.value,
+        "conductor_ritual_stage": conductor_ritual_stage(conductor_phase).value,
+        "score": {
+            "appetite_minutes": appetite_minutes,
+            "micro_spec": {
+                "outcome": str(spec.get("outcome", "")),
+                "non_goals": _string_list(spec.get("non_goals")),
+                "acceptance_checks": _string_list(spec.get("acceptance_checks")),
+            },
+        },
+        "rehearse": {
+            "rehearsal_commands": _string_list(rehearsal_commands),
+            "test_obligations": _string_list(test_obligations),
+        },
+        "perform": {
+            "regression_detected": regression_detected,
+            "postmortem_required": regression_detected is True,
+            "postmortem": postmortem,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Resource weight vocabulary (shared by claims + tool checkout)
 # ---------------------------------------------------------------------------
 

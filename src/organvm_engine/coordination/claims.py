@@ -32,6 +32,7 @@ from organvm_engine.coordination.lifecycle import (
     WEIGHT_COSTS,  # noqa: F401 — re-exported for backward compat
     AgentPhase,  # noqa: F401 — re-exported for backward compat
     ResourceWeight,  # noqa: F401 — re-exported for backward compat
+    build_conductor_ritual_metadata,
     normalise_weight,
     weight_cost,
 )
@@ -123,6 +124,10 @@ class WorkClaim:
     scope: str = ""  # free-text description
     resource_weight: str = "medium"  # light, medium, heavy
     test_obligations: list[str] = field(default_factory=list)  # deferred test cmds
+    conductor_phase: str = "BUILD"
+    appetite_minutes: int | None = None
+    micro_spec: dict[str, Any] = field(default_factory=dict)
+    conductor_ritual: dict[str, Any] = field(default_factory=dict)
     ttl_seconds: int = DEFAULT_CLAIM_TTL_SECONDS
     released: bool = False
     release_timestamp: float = 0.0
@@ -154,6 +159,17 @@ class WorkClaim:
             parts.append(f"module:{m}")
         return parts
 
+    def ritual_metadata(self) -> dict[str, Any]:
+        """Return serialized Conductor ritual metadata for this claim."""
+        if self.conductor_ritual:
+            return self.conductor_ritual
+        return build_conductor_ritual_metadata(
+            phase=self.conductor_phase or "BUILD",
+            appetite_minutes=self.appetite_minutes,
+            micro_spec=self.micro_spec,
+            test_obligations=self.test_obligations,
+        )
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "claim_id": self.claim_id,
@@ -169,6 +185,10 @@ class WorkClaim:
             "resource_weight": self.resource_weight,
             "cost": self.cost,
             "test_obligations": self.test_obligations,
+            "conductor_phase": self.conductor_phase,
+            "appetite_minutes": self.appetite_minutes,
+            "micro_spec": self.micro_spec,
+            "conductor_ritual": self.ritual_metadata(),
             "ttl_seconds": self.ttl_seconds,
             "released": self.released,
             "release_timestamp": self.release_timestamp,
@@ -305,6 +325,9 @@ def punch_in(
     scope: str = "",
     resource_weight: str = "medium",
     test_obligations: list[str] | None = None,
+    conductor_phase: str = "BUILD",
+    appetite_minutes: int | None = None,
+    micro_spec: dict[str, Any] | None = None,
     ttl_seconds: int = DEFAULT_CLAIM_TTL_SECONDS,
 ) -> dict[str, Any]:
     """Punch in: declare areas of influence for this work session.
@@ -317,6 +340,10 @@ def punch_in(
         resource_weight: light (1), medium (2), or heavy (3) cost units.
         test_obligations: Test commands to defer to the prover session
             (e.g. ["pytest organvm-engine/tests/ -v"]).
+        conductor_phase: Current Conductor phase for this claim.
+        appetite_minutes: Score-phase appetite, when known.
+        micro_spec: Score-phase micro-spec with outcome, non_goals, and
+            acceptance_checks.
         ttl_seconds: Claim expiry (default 4h).
 
     Returns a dict with:
@@ -336,8 +363,15 @@ def punch_in(
     files = files or []
     modules = modules or []
     test_obligations = test_obligations or []
+    micro_spec = micro_spec or {}
 
     resource_weight = normalise_weight(resource_weight)
+    conductor_ritual = build_conductor_ritual_metadata(
+        phase=conductor_phase,
+        appetite_minutes=appetite_minutes,
+        micro_spec=micro_spec,
+        test_obligations=test_obligations,
+    )
 
     # Generate a unique handle (name tag)
     existing_handles = {c.handle for c in active_claims() if c.handle}
@@ -377,6 +411,10 @@ def punch_in(
         "scope": scope,
         "resource_weight": resource_weight,
         "test_obligations": test_obligations,
+        "conductor_phase": conductor_phase,
+        "appetite_minutes": appetite_minutes,
+        "micro_spec": micro_spec,
+        "conductor_ritual": conductor_ritual,
         "ttl_seconds": ttl_seconds,
     }
     _append_event(event)
@@ -399,6 +437,7 @@ def punch_in(
         "active_claims": len(active_claims()),
         "resource_weight": resource_weight,
         "cost": proposed_cost,
+        "conductor_ritual": conductor_ritual,
         "capacity": capacity_status(),
         "areas": [
             *[f"organ:{o}" for o in organs],
@@ -423,6 +462,7 @@ def punch_in(
                 "agent": agent,
                 "resource_weight": resource_weight,
                 "areas": result["areas"],
+                "conductor_ritual_stage": conductor_ritual["conductor_ritual_stage"],
             },
         )
     except Exception:
@@ -435,7 +475,12 @@ def punch_in(
         source_organ="META-ORGANVM",
         source_repo="organvm-engine",
         actor=handle,
-        payload={"agent": agent, "handle": handle, "areas": result["areas"]},
+        payload={
+            "agent": agent,
+            "handle": handle,
+            "areas": result["areas"],
+            "conductor_ritual_stage": conductor_ritual["conductor_ritual_stage"],
+        },
     )
 
     return result
@@ -556,6 +601,7 @@ def work_board() -> dict[str, Any]:
         }
         if c.test_obligations:
             entry["test_obligations"] = c.test_obligations
+        entry["conductor_ritual"] = c.ritual_metadata()
         by_agent.setdefault(c.agent, []).append(entry)
         all_test_obligations.extend(c.test_obligations)
 

@@ -282,6 +282,79 @@ def insert_backflow_signal(
     conn.commit()
 
 
+def get_latest_proposal(conn: sqlite3.Connection, external_repo: str) -> sqlite3.Row | None:
+    """Most recent transmutation proposal for a repo (inbound face)."""
+    try:
+        return conn.execute(
+            "SELECT * FROM transmutation_proposal WHERE external_repo=? "
+            "ORDER BY id DESC LIMIT 1",
+            (external_repo,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+
+
+def set_proposal_status(
+    conn: sqlite3.Connection,
+    proposal_id: int,
+    status: str,
+    *,
+    files: list[str] | None = None,
+    tests: list[str] | None = None,
+) -> None:
+    """Advance a proposal's own status (distinct from the exchange lifecycle state)."""
+    if files is not None or tests is not None:
+        conn.execute(
+            "UPDATE transmutation_proposal SET status=?, files_json=?, tests_json=? "
+            "WHERE id=?",
+            (status, json.dumps(files or []), json.dumps(tests or []), proposal_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE transmutation_proposal SET status=? WHERE id=?", (status, proposal_id),
+        )
+    conn.commit()
+
+
+def get_latest_candidate(conn: sqlite3.Connection, external_repo: str) -> Any | None:
+    """Reconstruct the most recent contribution candidate (outbound face)."""
+    try:
+        row = conn.execute(
+            "SELECT * FROM contribution_candidate WHERE external_repo=? "
+            "ORDER BY id DESC LIMIT 1",
+            (external_repo,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if row is None:
+        return None
+    from organvm_engine.portal.models import ContributionCandidate
+
+    return ContributionCandidate(
+        exchange_id=row["exchange_id"],
+        external_repo=row["external_repo"],
+        kind=row["kind"],
+        rationale=row["rationale"],
+        contribution_score=row["contribution_score"],
+        status=row["status"],
+        packet=json.loads(row["packet_json"] or "{}"),
+    )
+
+
+def latest_upstream_interaction(
+    conn: sqlite3.Connection, exchange_id: str,
+) -> sqlite3.Row | None:
+    """Most recent upstream interaction for an exchange (the external-write record)."""
+    try:
+        return conn.execute(
+            "SELECT * FROM upstream_interaction WHERE exchange_id=? "
+            "ORDER BY id DESC LIMIT 1",
+            (exchange_id,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+
+
 def counts(conn: sqlite3.Connection) -> dict[str, int]:
     out: dict[str, int] = {}
     for table in ("resonance_edge", "transmutation_proposal", "contribution_candidate",

@@ -827,7 +827,7 @@ def suggest_parallel_mirrors(
                         project=proj["project"],
                         platform="github",
                         relevance=proj["relevance"],
-                        engagement=["watch", "discussions"],
+                        engagement=["presence", "dialogue"],
                         tags=["suggested", "parallel", domain],
                     ))
 
@@ -843,7 +843,7 @@ def suggest_parallel_mirrors(
                             project=proj["project"],
                             platform="github",
                             relevance=proj["relevance"],
-                            engagement=["watch", "discussions"],
+                            engagement=["presence", "dialogue"],
                             tags=["suggested", "parallel", domain],
                         ))
 

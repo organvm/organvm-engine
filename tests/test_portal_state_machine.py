@@ -35,7 +35,7 @@ def test_outbound_branch_reaches_backflow():
         ExchangeState.MERGED,
         ExchangeState.BACKFLOW_COMPLETE,
     ]
-    for a, b in zip(path, path[1:], strict=True):
+    for a, b in zip(path, path[1:], strict=False):
         assert sm.advance(a, b) == b
 
 

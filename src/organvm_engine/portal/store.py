@@ -246,7 +246,7 @@ def insert_transmutation_proposal(conn: sqlite3.Connection, proposal: Any) -> in
          json.dumps(proposal.tests_required), proposal.status, now_iso()),
     )
     conn.commit()
-    return int(cur.lastrowid)
+    return int(cur.lastrowid or 0)
 
 
 def insert_contribution_candidate(conn: sqlite3.Connection, candidate: Any) -> int:
@@ -261,7 +261,7 @@ def insert_contribution_candidate(conn: sqlite3.Connection, candidate: Any) -> i
          json.dumps(candidate.packet), now_iso()),
     )
     conn.commit()
-    return int(cur.lastrowid)
+    return int(cur.lastrowid or 0)
 
 
 def insert_backflow_signal(

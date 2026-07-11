@@ -76,3 +76,25 @@ class ContributionCandidate:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass
+class PortalHealthSnapshot:
+    """One BIFRONS metabolize beat, made observable.
+
+    The state surface the beat writes each cycle — what the portal absorbed,
+    mapped, and prepared, plus how many contributions pool awaiting the single
+    human gate. This is the effector's proof-of-life for organ-health.
+    """
+
+    generated_at: str
+    stars_absorbed: int = 0
+    dossiers: int = 0
+    resonance_edges: int = 0
+    proposals_prepared: int = 0
+    prepared_awaiting_gate: int = 0
+    exchanges_by_state: dict[str, int] = field(default_factory=dict)
+    last_run_seconds: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)

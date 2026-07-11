@@ -229,10 +229,16 @@ from organvm_engine.cli.plans import (
     cmd_plans_tidy,
 )
 from organvm_engine.cli.portal import (
+    cmd_portal_backflow,
+    cmd_portal_candidate,
     cmd_portal_convergences,
     cmd_portal_import_stars,
+    cmd_portal_metabolize,
+    cmd_portal_package,
+    cmd_portal_prepare,
     cmd_portal_propose,
     cmd_portal_status,
+    cmd_portal_submit,
 )
 from organvm_engine.cli.primitives import (
     cmd_primitive_guardian_add_watch,
@@ -2248,6 +2254,85 @@ def build_parser() -> argparse.ArgumentParser:
     portal_prop.add_argument("target", help="Target ORGANVM repo")
     portal_prop.add_argument("--db", default=None, help="Portal DB path")
 
+    portal_prepare = portal_sub.add_parser(
+        "prepare", help="Inbound: realize the proposal as a draft internal PR",
+    )
+    portal_prepare.add_argument("external", help="External repo (owner/name)")
+    portal_prepare.add_argument("--db", default=None, help="Portal DB path")
+    portal_prepare.add_argument(
+        "--out-dir", dest="out_dir", default=None, help="Draft-PR artifact directory",
+    )
+
+    portal_cand = portal_sub.add_parser(
+        "candidate", help="Outbound: evidence -> contribution candidate",
+    )
+    portal_cand.add_argument("external", help="External repo (owner/name)")
+    portal_cand.add_argument(
+        "--kind", required=True,
+        help="Contribution kind (reproducible-defect, documentation-ambiguity, ...)",
+    )
+    portal_cand.add_argument("--rationale", required=True, help="Evidence-driven rationale")
+    portal_cand.add_argument("--tractability", type=float, default=0.5)
+    portal_cand.add_argument("--testability", type=float, default=0.5)
+    portal_cand.add_argument("--db", default=None, help="Portal DB path")
+
+    portal_pkg = portal_sub.add_parser(
+        "package", help="Outbound: worktree + checks -> prepared packet (sends nothing)",
+    )
+    portal_pkg.add_argument("external", help="External repo (owner/name)")
+    portal_pkg.add_argument("--ref", default=None, help="Pinned upstream ref (default: snapshot)")
+    portal_pkg.add_argument("--db", default=None, help="Portal DB path")
+
+    portal_submit = portal_sub.add_parser(
+        "submit", help="The single human-gated external-write boundary (A2: never submits)",
+    )
+    portal_submit.add_argument("external", help="External repo (owner/name)")
+    portal_submit.add_argument(
+        "--approve", action="store_true", help="Human approval (escalates to A3)",
+    )
+    portal_submit.add_argument(
+        "--checks-passing", dest="checks_passing", action="store_true",
+        help="Assert upstream checks passed (required with --approve to authorize)",
+    )
+    portal_submit.add_argument(
+        "--execute", action="store_true",
+        help="Actually open the upstream PR (the irreversible external write)",
+    )
+    portal_submit.add_argument("--db", default=None, help="Portal DB path")
+
+    portal_bf = portal_sub.add_parser(
+        "backflow", help="Seven-organ backflow -> BACKFLOW_COMPLETE",
+    )
+    portal_bf.add_argument("external", help="External repo (owner/name)")
+    portal_bf.add_argument(
+        "--outcome", default="dormant", choices=["merged", "declined", "dormant"],
+        help="Exchange outcome to metabolize (default: dormant)",
+    )
+    portal_bf.add_argument("--write", action="store_true", help="Write the backflow manifest")
+    portal_bf.add_argument(
+        "--out-dir", dest="out_dir", default=None, help="Manifest output directory",
+    )
+    portal_bf.add_argument("--db", default=None, help="Portal DB path")
+
+    portal_meta = portal_sub.add_parser(
+        "metabolize", help="One bounded beat: absorb -> map -> prepare -> surface (never submits)",
+    )
+    portal_meta.add_argument("--budget", type=int, default=5, help="Max new stars/exchanges per beat")
+    portal_meta.add_argument(
+        "--threshold", type=float, default=0.15, help="Min resonance score to auto-prepare",
+    )
+    portal_meta.add_argument(
+        "--no-absorb", dest="no_absorb", action="store_true",
+        help="Skip the alchemia star-sync/dossier step (map + prepare only)",
+    )
+    portal_meta.add_argument(
+        "--state-dir", dest="state_dir", default=None, help="State-surface directory",
+    )
+    portal_meta.add_argument(
+        "--out-dir", dest="out_dir", default=None, help="Draft-PR artifact directory",
+    )
+    portal_meta.add_argument("--db", default=None, help="Portal DB path")
+
     # trivium — dialectica universalis
     trv = sub.add_parser(
         "trivium",
@@ -3583,6 +3668,12 @@ def main() -> int:
             "import-stars": cmd_portal_import_stars,
             "convergences": cmd_portal_convergences,
             "propose": cmd_portal_propose,
+            "prepare": cmd_portal_prepare,
+            "candidate": cmd_portal_candidate,
+            "package": cmd_portal_package,
+            "submit": cmd_portal_submit,
+            "backflow": cmd_portal_backflow,
+            "metabolize": cmd_portal_metabolize,
         }
         handler = portal_dispatch.get(getattr(args, "subcommand", "") or "")
         if handler:

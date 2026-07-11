@@ -211,3 +211,63 @@ def write_backflow_manifest(
     manifest_path = output_dir / "backflow-manifest.yaml"
     manifest_path.write_text(yaml.dump(manifest, default_flow_style=False, sort_keys=False))
     return manifest_path
+
+
+# --- BIFRONS: metabolize a portal exchange outcome through the seven organs ---
+_OUTCOME_TO_PR_STATE = {
+    "merged": PRState.MERGED,
+    "declined": PRState.CLOSED,
+    "dormant": PRState.OPEN,
+}
+
+
+def metabolize_exchange(
+    conn,
+    *,
+    exchange_id: str,
+    external_repo: str,
+    outcome: str,
+    title: str = "",
+    target_pr: int | None = None,
+    language: str | None = None,
+) -> list[BackflowSignal]:
+    """Route a BIFRONS exchange outcome through the seven-organ backflow.
+
+    Reuses ``classify_contribution`` (the canonical classifier) rather than
+    reimplementing routing, writes the resulting signals to the portal store,
+    and advances the exchange to BACKFLOW_COMPLETE. Review criticism and rejected
+    contributions are metabolized too — they are inputs, not waste.
+    """
+    from organvm_engine.portal import store
+    from organvm_engine.portal.state_machine import ExchangeState
+
+    repo = ContribRepo(
+        name=external_repo,
+        path=Path(),
+        target_repo=external_repo,
+        target_pr=target_pr,
+        language=language,
+    )
+    status = ContribStatus(
+        repo=repo,
+        state=_OUTCOME_TO_PR_STATE.get(outcome, PRState.UNKNOWN),
+        title=title or f"contribution to {external_repo}",
+    )
+    signals = classify_contribution(status)
+
+    store.init_exchange_schema(conn)
+    for signal in signals:
+        store.insert_backflow_signal(
+            conn,
+            exchange_id=exchange_id,
+            external_repo=external_repo,
+            signal_type=signal.signal_type.value,
+            organ=signal.organ_key,
+            content=signal.content,
+            confidence=signal.confidence,
+        )
+    store.advance_exchange(
+        conn, exchange_id, ExchangeState.BACKFLOW_COMPLETE.value,
+        data={"outcome": outcome, "backflow_signals": len(signals)},
+    )
+    return signals

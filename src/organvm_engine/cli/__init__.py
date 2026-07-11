@@ -228,6 +228,12 @@ from organvm_engine.cli.plans import (
     cmd_plans_sweep,
     cmd_plans_tidy,
 )
+from organvm_engine.cli.portal import (
+    cmd_portal_convergences,
+    cmd_portal_import_stars,
+    cmd_portal_propose,
+    cmd_portal_status,
+)
 from organvm_engine.cli.primitives import (
     cmd_primitive_guardian_add_watch,
     cmd_primitive_guardian_check,
@@ -2216,6 +2222,32 @@ def build_parser() -> argparse.ArgumentParser:
 
     net_sub.add_parser("suggest", help="Suggest next engagement actions")
 
+    # portal — BIFRONS star<->contribution portal (engine half)
+    portal = sub.add_parser(
+        "portal",
+        help="BIFRONS star<->contribution portal — resonance, proposals, convergence",
+    )
+    portal_sub = portal.add_subparsers(dest="subcommand")
+
+    portal_status = portal_sub.add_parser("status", help="Portal store status")
+    portal_status.add_argument("--db", default=None, help="Portal DB path")
+
+    portal_import = portal_sub.add_parser(
+        "import-stars", help="Compile star dossiers into resonance edges",
+    )
+    portal_import.add_argument("--db", default=None, help="Portal DB path")
+    portal_import.add_argument("--write", action="store_true", help="Persist edges (default)")
+
+    portal_conv = portal_sub.add_parser("convergences", help="Cross-organ convergence points")
+    portal_conv.add_argument("--db", default=None, help="Portal DB path")
+    portal_conv.add_argument("--min-repos", type=int, default=2, dest="min_repos")
+    portal_conv.add_argument("--json", action="store_true", help="Output JSON")
+
+    portal_prop = portal_sub.add_parser("propose", help="Generate a transmutation proposal")
+    portal_prop.add_argument("external", help="External repo (owner/name)")
+    portal_prop.add_argument("target", help="Target ORGANVM repo")
+    portal_prop.add_argument("--db", default=None, help="Portal DB path")
+
     # trivium — dialectica universalis
     trv = sub.add_parser(
         "trivium",
@@ -3544,6 +3576,18 @@ def main() -> int:
         if handler:
             return handler(args)
         parser.parse_args(["network", "--help"])
+        return 0
+    if args.command == "portal":
+        portal_dispatch = {
+            "status": cmd_portal_status,
+            "import-stars": cmd_portal_import_stars,
+            "convergences": cmd_portal_convergences,
+            "propose": cmd_portal_propose,
+        }
+        handler = portal_dispatch.get(getattr(args, "subcommand", "") or "")
+        if handler:
+            return handler(args)
+        parser.parse_args(["portal", "--help"])
         return 0
     if args.command == "trivium":
         trivium_dispatch = {

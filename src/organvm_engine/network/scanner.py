@@ -106,7 +106,7 @@ def scan_pyproject(repo_path: Path) -> list[MirrorEntry]:
                 project=github_repo,
                 platform="github",
                 relevance=f"Python dependency: {raw_name}",
-                engagement=["watch"],
+                engagement=["presence"],
                 tags=["auto-discovered", "python-dep"],
             ))
 
@@ -143,7 +143,7 @@ def scan_package_json(repo_path: Path) -> list[MirrorEntry]:
                     project=github_repo,
                     platform="github",
                     relevance=f"JS/TS dependency: {pkg_name}",
-                    engagement=["watch"],
+                    engagement=["presence"],
                     tags=["auto-discovered", "js-dep"],
                 ))
 
@@ -183,7 +183,7 @@ def scan_go_mod(repo_path: Path) -> list[MirrorEntry]:
                                 project=github_repo,
                                 platform="github",
                                 relevance=f"Go dependency: {mod_path}",
-                                engagement=["watch"],
+                                engagement=["presence"],
                                 tags=["auto-discovered", "go-dep"],
                             ))
             continue
@@ -201,7 +201,7 @@ def scan_go_mod(repo_path: Path) -> list[MirrorEntry]:
                                 project=github_repo,
                                 platform="github",
                                 relevance=f"Go dependency: {mod_path}",
-                                engagement=["watch"],
+                                engagement=["presence"],
                                 tags=["auto-discovered", "go-dep"],
                             ))
 
@@ -238,7 +238,7 @@ def scan_cargo_toml(repo_path: Path) -> list[MirrorEntry]:
                         project=github_repo,
                         platform="github",
                         relevance=f"Rust dependency: {crate_name}",
-                        engagement=["watch"],
+                        engagement=["presence"],
                         tags=["auto-discovered", "rust-dep"],
                     ))
 

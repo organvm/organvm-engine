@@ -305,6 +305,7 @@ from organvm_engine.cli.study import (
 )
 from organvm_engine.cli.taxonomy import cmd_taxonomy_audit, cmd_taxonomy_classify
 from organvm_engine.cli.testament import (
+    cmd_testament_bridge,
     cmd_testament_cascade,
     cmd_testament_catalog,
     cmd_testament_gallery,
@@ -2050,6 +2051,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     testament_play.add_argument("--registry", default=None, help="Registry path override")
 
+    testament_bridge = testament_sub.add_parser(
+        "bridge",
+        help="Transmit the sonic self-portrait to the alchemical-synthesizer via OSC",
+    )
+    testament_bridge.add_argument(
+        "--send",
+        action="store_true",
+        help="Actually transmit over UDP (default: dry-run)",
+    )
+    testament_bridge.add_argument(
+        "--host", default=None, help="Synthesizer host (default: 127.0.0.1)",
+    )
+    testament_bridge.add_argument(
+        "--port", type=int, default=None, help="Synthesizer OSC port (default: 57120)",
+    )
+    testament_bridge.add_argument(
+        "--per-message",
+        action="store_true",
+        help="Send each message as its own datagram (default: one OSC bundle)",
+    )
+    testament_bridge.add_argument("--json", action="store_true", help="JSON output")
+    testament_bridge.add_argument("--registry", default=None, help="Registry path override")
+
     testament_record = testament_sub.add_parser(
         "record-session",
         help="Detect self-referential changes and emit testament events",
@@ -3627,6 +3651,7 @@ def main() -> int:
             "catalog": cmd_testament_catalog,
             "gallery": cmd_testament_gallery,
             "play": cmd_testament_play,
+            "bridge": cmd_testament_bridge,
             "record-session": cmd_testament_record_session,
         }
         handler = testament_dispatch.get(getattr(args, "subcommand", "") or "")

@@ -376,6 +376,77 @@ def cmd_testament_play(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_testament_bridge(args: argparse.Namespace) -> int:
+    """Transmit the sonic self-portrait to the alchemical-synthesizer via OSC.
+
+    Gathers live system data, renders it as synthesizer parameters, encodes the
+    result as binary OSC, and ships it over UDP to SuperCollider's
+    ``TestamentReceiver.sc``. Dry-run by default — pass ``--send`` to transmit.
+    """
+    from organvm_engine.testament.osc_bridge import (
+        DEFAULT_HOST,
+        DEFAULT_PORT,
+        build_osc_messages,
+        send_to_synth,
+    )
+    from organvm_engine.testament.renderers.sonic import render_sonic_params
+    from organvm_engine.testament.sources import density_data, omega_data, topology_data
+
+    as_json = getattr(args, "json", False)
+    host = getattr(args, "host", None) or DEFAULT_HOST
+    port = getattr(args, "port", None) or DEFAULT_PORT
+    per_message = getattr(args, "per_message", False)
+    dry_run = not getattr(args, "send", False)
+    registry_path = getattr(args, "registry", None)
+    if registry_path:
+        registry_path = Path(registry_path)
+
+    # Gather live system data (same sources as `testament play`).
+    topo = topology_data(registry_path)
+    omega = omega_data(registry_path)
+    dens = density_data(registry_path)
+    met_ratio = omega["met_count"] / omega["total"] if omega["total"] else 0
+
+    testament = render_sonic_params(
+        organ_densities=dens["organ_densities"],
+        organ_repo_counts=topo["organ_repo_counts"],
+        status_distribution={},
+        met_ratio=met_ratio,
+        total_repos=topo["total_repos"],
+    )
+
+    messages = build_osc_messages(testament)
+    result = send_to_synth(
+        messages, host=host, port=port,
+        dry_run=dry_run, as_bundle=not per_message,
+    )
+
+    if as_json:
+        import dataclasses
+        print(json.dumps(dataclasses.asdict(result), indent=2))
+        return 1 if result.error else 0
+
+    transport = "bundle" if result.as_bundle else "per-message"
+    print(f"\n  Testament Sonic Bridge → {result.host}:{result.port}")
+    print(f"  {'═' * 48}")
+    print(f"  Messages:  {result.message_count} ({transport})")
+    print(f"  Payload:   {result.byte_count} bytes")
+
+    if dry_run:
+        print("\n  [dry-run] OSC messages that would be sent:")
+        for msg in result.messages:
+            print(f"    {msg}")
+        print("\n  Run with --send to transmit to the synthesizer.\n")
+        return 0
+
+    if result.error:
+        print(f"\n  ✗ Transmission failed: {result.error}\n")
+        return 1
+
+    print(f"\n  ✓ Transmitted {result.message_count} messages to the synthesizer.\n")
+    return 0
+
+
 def cmd_testament_record_session(args: argparse.Namespace) -> int:
     """Detect self-referential changes between commits and emit testament events.
 

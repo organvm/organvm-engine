@@ -176,6 +176,7 @@ from organvm_engine.cli.irf import (
     cmd_irf_status,
 )
 from organvm_engine.cli.ledger import (
+    cmd_ledger_anchor,
     cmd_ledger_checkpoint,
     cmd_ledger_genesis,
     cmd_ledger_log,
@@ -2104,6 +2105,13 @@ def build_parser() -> argparse.ArgumentParser:
     ledger_chk.add_argument("--write", action="store_true")
     ledger_chk.add_argument("--chain-path", default=None)
 
+    ledger_anchor = ledger_sub.add_parser("anchor", help="Anchor checkpoint on external chain")
+    ledger_anchor.add_argument("--write", action="store_true", help="Actually submit transaction")
+    ledger_anchor.add_argument("--rpc-url", default=None, help="Base L2 RPC URL")
+    ledger_anchor.add_argument("--contract", default=None, help="TestamentRegistry address")
+    ledger_anchor.add_argument("--private-key", default=None, help="Account private key")
+    ledger_anchor.add_argument("--chain-path", default=None)
+
     ledger_repair = ledger_sub.add_parser("repair", help="Repair corrupted chain")
     ledger_repair.add_argument("--write", action="store_true", help="Execute repair")
     ledger_repair.add_argument("--chain-path", default=None)
@@ -3641,6 +3649,7 @@ def main() -> int:
             "verify": cmd_ledger_verify,
             "log": cmd_ledger_log,
             "checkpoint": cmd_ledger_checkpoint,
+            "anchor": cmd_ledger_anchor,
             "repair": cmd_ledger_repair,
         }
         handler = ledger_dispatch.get(getattr(args, "subcommand", "") or "")

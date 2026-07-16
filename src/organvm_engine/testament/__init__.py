@@ -10,13 +10,23 @@ from pathlib import Path
 from typing import Any
 
 from organvm_engine.testament.catalog import TestamentArtifact
+from organvm_engine.testament.iceberg_atlas import (
+    AtlasCompileResult,
+    IcebergAtlasCompiler,
+    ReceiptIdentity,
+    compile_iceberg_atlas,
+)
 from organvm_engine.testament.manifest import ArtifactModality, ArtifactType, OrganOutputProfile
 
 __all__ = [
     "ArtifactModality",
     "ArtifactType",
+    "AtlasCompileResult",
+    "IcebergAtlasCompiler",
     "OrganOutputProfile",
+    "ReceiptIdentity",
     "TestamentArtifact",
+    "compile_iceberg_atlas",
     "get_testament_summary",
 ]
 

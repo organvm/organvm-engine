@@ -193,19 +193,13 @@ def _citation_debt(state: Mapping[str, Any]) -> dict[str, Any]:
         ratification = directive["testament"].get("ratification", {})
         assertion_id = ratification.get("assertion_evidence_reference")
         assertion = next(
-            (
-                item
-                for item in state["assertions"]
-                if item.get("assertion_id") == assertion_id
-            ),
+            (item for item in state["assertions"] if item.get("assertion_id") == assertion_id),
             None,
         )
         groups = {
             str(reference.get("independence_group"))
             for reference in (
-                assertion.get("evidence_references", [])
-                if isinstance(assertion, Mapping)
-                else []
+                assertion.get("evidence_references", []) if isinstance(assertion, Mapping) else []
             )
             if isinstance(reference, Mapping) and reference.get("independence_group")
         }
@@ -576,6 +570,7 @@ class IcebergAtlasCompiler:
         output_dir: Path,
         cursor_path: Path,
         max_children: int = 1_000,
+        strict: bool = True,
     ) -> AtlasCompileResult:
         if max_children <= 0:
             raise ValueError("max_children must be positive")
@@ -609,7 +604,7 @@ class IcebergAtlasCompiler:
         )
         public_core, detail_core = _render_core(bundle, finalized)
         missing_requirements = detail_core["readiness"]["missing_requirements"]
-        if missing_requirements:
+        if missing_requirements and strict:
             cursor.update(
                 {
                     "complete": False,
@@ -624,8 +619,87 @@ class IcebergAtlasCompiler:
             )
 
         artifact_digest = str(public_core["atlas_digest"])
-        event = self._receipt_event(str(bundle["snapshot_id"]), input_digest, artifact_digest)
         ideal_register = detail_core["ideal_form_register"]
+        coverage = bundle["coverage"]
+        self_image_readiness = bundle["node_self_image_set"].get("readiness", {})
+        predicate_results = {
+            "source_envelopes_resolved": bool(finalized["source_envelopes"])
+            and "source_coverage_ready" not in missing_requirements,
+            "assertions_verified": bool(finalized["assertions"])
+            and "verified_assertion_evidence" not in missing_requirements,
+            "ideal_forms_complete": "complete_ideal_predicates" not in missing_requirements,
+            "self_images_complete": not {
+                "exact_one_self_images",
+                "complete_self_images",
+            }
+            & set(missing_requirements),
+            "timelines_complete": all(
+                public_core["timelines"][lane] for lane in ("operator_intent", "artifact")
+            ),
+            "zooms_complete": all(public_core["zoom_levels"][level] for level in ZOOM_LEVELS),
+            "atlas_digest_verified": True,
+        }
+
+        def debt_values(*values: Any) -> list[str]:
+            return sorted(
+                {str(item) for value in values if isinstance(value, list) for item in value},
+            )
+
+        quarantine_ids = [
+            f"{item.get('reason', 'quarantine')}:{item.get('unit_id', 'unknown')}"
+            for item in finalized["quarantine"]
+            if isinstance(item, Mapping)
+        ]
+        incomplete_ideal_predicates = [
+            str(predicate["predicate_id"])
+            for wrapper in finalized["ideal_forms"]
+            for predicate in wrapper["ideal_form"].get("predicates", [])
+            if isinstance(predicate, Mapping) and predicate.get("result") != "pass"
+        ]
+        readiness = {
+            "exact_all": bool(coverage.get("exact_all"))
+            and self_image_readiness.get("exact_all") is True
+            and not finalized["quarantine"],
+            "unresolved_blockers": debt_values(
+                coverage.get("unresolved_blockers"),
+                self_image_readiness.get("unresolved_blockers"),
+            ),
+            "quarantines": debt_values(
+                coverage.get("quarantines"),
+                self_image_readiness.get("quarantines"),
+                quarantine_ids,
+            ),
+            "missing_requirements": debt_values(
+                coverage.get("missing_requirements"),
+                self_image_readiness.get("missing_requirements"),
+                missing_requirements,
+            ),
+            "citation_debt": debt_values(
+                coverage.get("citation_debt"),
+                self_image_readiness.get("citation_debt"),
+                public_core["citation_debt"],
+            ),
+            "incomplete_predicates": debt_values(
+                coverage.get("incomplete_predicates"),
+                self_image_readiness.get("incomplete_predicates"),
+                incomplete_ideal_predicates,
+            ),
+        }
+        readiness["ready"] = bool(
+            readiness["exact_all"]
+            and all(predicate_results.values())
+            and not any(
+                readiness[field]
+                for field in (
+                    "unresolved_blockers",
+                    "quarantines",
+                    "missing_requirements",
+                    "citation_debt",
+                    "incomplete_predicates",
+                )
+            )
+        )
+        readiness["status"] = "ready" if readiness["ready"] else "blocked"
         receipt_body = {
             "contract_name": RECEIPT_SCHEMA,
             "contract_version": 1,
@@ -671,39 +745,36 @@ class IcebergAtlasCompiler:
                 lane: len(public_core["timelines"][lane])
                 for lane in ("operator_intent", "artifact")
             },
-            "zoom_counts": {
-                level: len(public_core["zoom_levels"][level]) for level in ZOOM_LEVELS
-            },
-            "predicate_results": {
-                "source_envelopes_resolved": True,
-                "assertions_verified": True,
-                "ideal_forms_complete": True,
-                "self_images_complete": True,
-                "timelines_complete": True,
-                "zooms_complete": True,
-                "atlas_digest_verified": True,
-            },
-            "readiness": {
-                "exact_all": True,
-                "unresolved_blockers": [],
-                "quarantines": [],
-                "missing_requirements": [],
-                "citation_debt": [],
-                "incomplete_predicates": [],
-                "ready": True,
-                "status": "ready",
-            },
+            "zoom_counts": {level: len(public_core["zoom_levels"][level]) for level in ZOOM_LEVELS},
+            "predicate_results": predicate_results,
+            "readiness": readiness,
             "digest_algorithm": "sha256-rfc8785-excluding-self-digest-v1",
         }
         receipt = {**receipt_body, "receipt_digest": content_digest(receipt_body)}
+        event = (
+            self._receipt_event(
+                str(bundle["snapshot_id"]),
+                input_digest,
+                artifact_digest,
+            )
+            if readiness["ready"]
+            else None
+        )
         detail = {
             **detail_core,
             "receipt": receipt,
-            "event_spine": {
-                "event_id": event.event_id,
-                "sequence": event.sequence,
-                "hash": event.hash,
-            },
+            "event_spine": (
+                {
+                    "event_id": event.event_id,
+                    "sequence": event.sequence,
+                    "hash": event.hash,
+                }
+                if event is not None
+                else {
+                    "status": "not_emitted",
+                    "reason": "atlas-readiness-blocked",
+                }
+            ),
         }
         public_path = output_dir / PUBLIC_FILENAME
         detail_path = output_dir / DETAIL_FILENAME
@@ -718,6 +789,7 @@ class IcebergAtlasCompiler:
                 "next_child": len(children),
                 "state": finalized,
                 "receipt": receipt,
+                "blocked_requirements": missing_requirements,
             },
         )
         _write_if_changed(cursor_path, cursor)
@@ -818,6 +890,7 @@ def compile_iceberg_atlas(
     event_spine: EventSpine,
     receipt_identity: ReceiptIdentity,
     max_children: int = 1_000,
+    strict: bool = True,
 ) -> AtlasCompileResult:
     """Functional entrypoint for the deterministic Atlas compiler."""
     return IcebergAtlasCompiler(
@@ -828,4 +901,5 @@ def compile_iceberg_atlas(
         output_dir=output_dir,
         cursor_path=cursor_path,
         max_children=max_children,
+        strict=strict,
     )

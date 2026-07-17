@@ -55,13 +55,21 @@ def _write_if_changed(path: Path, value: Any) -> None:
     temporary.replace(path)
 
 
+def _source_id_from_reference(value: Any) -> str:
+    reference = str(value)
+    if "#" in reference:
+        reference = reference.rsplit("#", 1)[-1]
+    if reference.startswith("source-envelope:"):
+        reference = reference.removeprefix("source-envelope:")
+    return reference
+
+
 def _source_reference_matches(assertion: Mapping[str, Any], source: Mapping[str, Any]) -> bool:
     source_id = str(source["source_id"])
-    accepted = {source_id, f"source-envelope:{source_id}"}
     return any(
         isinstance(evidence, Mapping)
         and evidence.get("evidence_type") == "immutable_source_event"
-        and evidence.get("reference") in accepted
+        and _source_id_from_reference(evidence.get("reference")) == source_id
         and evidence.get("body_hash") == source.get("body_hash")
         for evidence in assertion.get("evidence_references", [])
     )
@@ -123,7 +131,9 @@ def compile_candidate_testament(
             raise ValueError("normalized event must be an object")
         if schema_id(event) != SCHEMA_NORMALIZED_EVENT or event.get("contract_version") != 1:
             raise ValueError("invalid normalized event")
-        source_id = _required_text(event, "source_envelope_reference")
+        source_id = _source_id_from_reference(
+            _required_text(event, "source_envelope_reference"),
+        )
         identity_basis = event.get("identity_basis")
         if not isinstance(identity_basis, Mapping):
             raise ValueError("normalized event identity basis is missing")
@@ -146,12 +156,25 @@ def compile_candidate_testament(
     for assertion in assertions:
         if not isinstance(assertion, Mapping):
             raise ValueError("assertion evidence must be an object")
-        if schema_id(assertion) != SCHEMA_ASSERTION_EVIDENCE or assertion.get("contract_version") != 1:
+        if (
+            schema_id(assertion) != SCHEMA_ASSERTION_EVIDENCE
+            or assertion.get("contract_version") != 1
+        ):
             raise ValueError("invalid assertion evidence")
         assertion_id = _required_text(assertion, "assertion_id")
-        if assertion.get("verification_state") != "verified":
-            raise ValueError("candidate assertion evidence is not verified")
+        if assertion.get("verification_state") != "unverified":
+            raise ValueError(
+                "candidate assertion evidence must remain unverified until CORPVS ratification",
+            )
         evidence = _required_list(assertion, "evidence_references")
+        if any(
+            isinstance(reference, Mapping)
+            and reference.get("evidence_type") == "ratified_constitutional_record"
+            for reference in evidence
+        ):
+            raise ValueError(
+                "candidate assertion evidence cannot predeclare a ratified constitutional record",
+            )
         groups = {
             str(reference.get("independence_group"))
             for reference in evidence
@@ -211,7 +234,11 @@ def compile_candidate_testament(
             for source_id in authority_source_ids
         )
     ]
-    if len(cited_assertions) != len(citation_ids) or not operator_assertions:
+    # A testament may also cite specifications, lineage artifacts, and frozen
+    # snapshot receipts.  Only assertion citations are resolved through the
+    # assertion-evidence set; non-assertion citations must not make an otherwise
+    # valid operator-directive assertion appear unresolved.
+    if not operator_assertions:
         raise ValueError("candidate operator-directive assertion is unresolved")
 
     candidate = deepcopy(dict(testament_value))
@@ -223,11 +250,30 @@ def compile_candidate_testament(
         "receipt_id": f"candidate-testament:{snapshot_id}",
         "snapshot_id": snapshot_id,
         "snapshot_at": snapshot_at,
+        "snapshot_digest": _required_text(bundle, "snapshot_digest"),
         "compilation_pass": "candidate",
         "input_digest": str(
             bundle.get("_snapshot_bundle_digest") or content_digest(bundle),
         ),
         "candidate_digest": content_digest(candidate),
+        "source_envelope_set_digest": content_digest(
+            [
+                {
+                    "source_id": source_id,
+                    "body_hash": source_by_id[source_id]["body_hash"],
+                }
+                for source_id in sorted(source_by_id)
+            ],
+        ),
+        "normalized_event_set_digest": content_digest(
+            [
+                {
+                    "source_id": source_id,
+                    "event_id": event_by_source[source_id]["event_id"],
+                }
+                for source_id in sorted(event_by_source)
+            ],
+        ),
         "authority_node_ids": sorted(set(authority_node_ids)),
         "source_envelope_ids": sorted(set(authority_source_ids)),
         "assertion_ids": sorted(
@@ -238,7 +284,7 @@ def compile_candidate_testament(
             "operator_events": len(set(authority_node_ids)),
             "normalized_events": len(event_by_source),
             "source_envelopes": len(source_by_id),
-            "verified_assertions": len(assertion_by_id),
+            "candidate_assertions": len(assertion_by_id),
         },
         "ready_for_owner_ratification": True,
     }

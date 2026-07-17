@@ -219,10 +219,7 @@ def _refresh_coverage(bundle: dict) -> None:
             and node.get("lane") == "operator_intent"
             and node.get("node_id") != "intent-operator-adoption"
         ]
-        event_by_node = {
-            node["node_id"]: _normalized_event(node)
-            for node in authority_nodes
-        }
+        event_by_node = {node["node_id"]: _normalized_event(node) for node in authority_nodes}
         ratification["authority_events"] = [
             {
                 "event_id": event_by_node[node["node_id"]]["event_id"],
@@ -544,7 +541,13 @@ def _bundle() -> dict:
     return bundle
 
 
-def _compile(tmp_path: Path, bundle: dict, max_children: int = 1_000):
+def _compile(
+    tmp_path: Path,
+    bundle: dict,
+    max_children: int = 1_000,
+    *,
+    strict: bool = True,
+):
     spine = EventSpine(path=tmp_path / "events.jsonl", max_chain_bytes=0)
     compiler = IcebergAtlasCompiler(spine, receipt_identity=RECEIPT_IDENTITY)
     result = compiler.compile(
@@ -552,6 +555,7 @@ def _compile(tmp_path: Path, bundle: dict, max_children: int = 1_000):
         output_dir=tmp_path / "output",
         cursor_path=tmp_path / "cursor.json",
         max_children=max_children,
+        strict=strict,
     )
     return spine, compiler, result
 
@@ -649,9 +653,7 @@ def test_duplicate_transports_keep_role_aware_authority(tmp_path: Path) -> None:
     _, _, result = _compile(tmp_path, bundle)
     detail = json.loads(result.detail_path.read_text())
     lanes = {
-        item["node_id"]: item["lane"]
-        for lane in detail["timelines"].values()
-        for item in lane
+        item["node_id"]: item["lane"] for lane in detail["timelines"].values() for item in lane
     }
     assert lanes[operator["node_id"]] == "operator_intent"
     assert lanes[continuation["node_id"]] == "artifact"
@@ -690,10 +692,7 @@ def test_malformed_units_quarantine_without_stopping_siblings(tmp_path: Path) ->
     assert "MALFORMED-PRIVATE-BODY" not in cursor_text
     assert not (tmp_path / "output" / "iceberg-atlas.public.json").exists()
     assert len(cursor["state"]["quarantine"]) == 3
-    assert all(
-        item["record_hash"].startswith("sha256:")
-        for item in cursor["state"]["quarantine"]
-    )
+    assert all(item["record_hash"].startswith("sha256:") for item in cursor["state"]["quarantine"])
 
 
 def test_public_output_is_redacted_while_private_detail_preserves_custody(
@@ -709,6 +708,68 @@ def test_public_output_is_redacted_while_private_detail_preserves_custody(
     assert "/private/archive/plan.json" in detail_text
 
 
+def test_allow_blocked_materializes_honest_atlas_without_verified_event(
+    tmp_path: Path,
+) -> None:
+    bundle = _bundle()
+    coverage = bundle["coverage"]
+    blocker = {
+        "source_id": "source-unavailable-export",
+        "status": "owner_blocked",
+        "accessible": False,
+        "owner_reference": "owner:source-export",
+        "failed_predicate": "official-export-present",
+        "next_action": "Acquire the owner-issued read-only export.",
+        "evidence_references": ["owner:source-export"],
+    }
+    coverage["sources"].append(blocker)
+    coverage["denominator"]["count"] += 1
+    coverage["counts"]["owner_blocked"] = 1
+    coverage["ready"] = False
+    coverage["unresolved_blockers"] = [blocker["source_id"]]
+    coverage["residual_owners"] = [
+        {
+            key: blocker[key]
+            for key in (
+                "source_id",
+                "owner_reference",
+                "failed_predicate",
+                "next_action",
+            )
+        },
+    ]
+
+    spine, compiler, result = _compile(tmp_path, bundle, strict=False)
+    assert result.complete
+    assert result.receipt["readiness"]["ready"] is False
+    assert result.receipt["readiness"]["status"] == "blocked"
+    assert "source_coverage_ready" in result.receipt["readiness"]["missing_requirements"]
+    assert result.public_path.is_file()
+    assert result.detail_path.is_file()
+    assert result.receipt_path.is_file()
+    assert spine.snapshot()["event_count"] == 0
+
+    before = {
+        path: path.read_bytes()
+        for path in (
+            result.public_path,
+            result.detail_path,
+            result.receipt_path,
+            result.cursor_path,
+        )
+    }
+    fixed = compiler.compile(
+        bundle,
+        output_dir=tmp_path / "output",
+        cursor_path=tmp_path / "cursor.json",
+        strict=False,
+    )
+    assert fixed.complete
+    assert fixed.processed_children == 0
+    assert all(path.read_bytes() == value for path, value in before.items())
+    assert spine.snapshot()["event_count"] == 0
+
+
 def test_coverage_contract_rejects_inconsistent_exact_all(tmp_path: Path) -> None:
     bundle = _bundle()
     bundle["coverage"]["denominator"]["count"] += 1
@@ -720,9 +781,9 @@ def test_assertion_gate_rejects_single_source_and_keeps_atlas_unready(
     tmp_path: Path,
 ) -> None:
     bundle = _bundle()
-    bundle["assertion_evidence"][0]["evidence_references"] = bundle[
-        "assertion_evidence"
-    ][0]["evidence_references"][:1]
+    bundle["assertion_evidence"][0]["evidence_references"] = bundle["assertion_evidence"][0][
+        "evidence_references"
+    ][:1]
 
     with pytest.raises(ValueError, match="strict readiness"):
         _compile(tmp_path, bundle)
@@ -769,9 +830,7 @@ def test_ratification_fails_when_an_immutable_operator_event_is_missing(
         "event_id"
     ]
     bundle["normalized_events"] = [
-        event
-        for event in bundle["normalized_events"]
-        if event["event_id"] != missing_event_id
+        event for event in bundle["normalized_events"] if event["event_id"] != missing_event_id
     ]
 
     with pytest.raises(ValueError, match="ratified_governance_testament"):
@@ -804,9 +863,7 @@ def test_handwritten_ideal_status_cannot_override_predicate_receipts(
 
 def test_self_image_ideal_state_must_match_predicate_receipts(tmp_path: Path) -> None:
     bundle = _bundle()
-    active_form = bundle["node_self_image_set"]["self_images"][0][
-        "active_ideal_forms"
-    ][0]
+    active_form = bundle["node_self_image_set"]["self_images"][0]["active_ideal_forms"][0]
     active_form["implementation_state"] = "partial"
     _refresh_artifact_digest(bundle, "node_self_image_set", "set_digest")
 
@@ -877,6 +934,23 @@ def test_candidate_pass_is_non_ratifying_bounded_and_idempotent(tmp_path: Path) 
     bundle = _bundle()
     bundle["governance_testament"]["status"] = "candidate"
     bundle["governance_testament"].pop("ratification")
+    candidate_assertion = bundle["assertion_evidence"][0]
+    candidate_assertion["verification_state"] = "unverified"
+    candidate_assertion["evidence_references"] = [
+        evidence
+        for evidence in candidate_assertion["evidence_references"]
+        if evidence["evidence_type"] == "immutable_source_event"
+    ]
+    candidate_assertion["evidence_references"].append(
+        {
+            "evidence_id": "evidence:second-native-event",
+            "independence_group": "second-native-custody",
+            "evidence_type": "immutable_source_event",
+            "reference": bundle["source_envelopes"][1]["source_id"],
+            "body_hash": bundle["source_envelopes"][1]["body_hash"],
+        },
+    )
+    bundle["governance_testament"]["citations"].append("specs/SPEC-000.md")
     output = tmp_path / "candidate"
 
     first = compile_candidate_testament(bundle, output_dir=output, max_units=100)
@@ -889,6 +963,7 @@ def test_candidate_pass_is_non_ratifying_bounded_and_idempotent(tmp_path: Path) 
     assert "ratification" not in candidate
     assert second.receipt["compilation_pass"] == "candidate"
     assert second.receipt["ready_for_owner_ratification"] is True
+    assert second.receipt["counts"]["candidate_assertions"] == 1
     assert second.testament_path.read_bytes() == testament_before
     assert second.receipt_path.read_bytes() == receipt_before
 
@@ -896,12 +971,58 @@ def test_candidate_pass_is_non_ratifying_bounded_and_idempotent(tmp_path: Path) 
     with pytest.raises(ValueError, match="refuses"):
         compile_candidate_testament(bundle, output_dir=output, max_units=100)
 
+    preverified = _bundle()
+    preverified["governance_testament"]["status"] = "candidate"
+    preverified["governance_testament"].pop("ratification")
+    with pytest.raises(ValueError, match="must remain unverified"):
+        compile_candidate_testament(preverified, output_dir=output, max_units=100)
+
     missing_event = _bundle()
     missing_event["governance_testament"]["status"] = "candidate"
     missing_event["governance_testament"].pop("ratification")
+    missing_event["assertion_evidence"] = [deepcopy(candidate_assertion)]
     missing_event["normalized_events"] = missing_event["normalized_events"][1:]
     with pytest.raises(ValueError, match="normalized event is unresolved"):
         compile_candidate_testament(missing_event, output_dir=output, max_units=100)
+
+
+def test_candidate_resolves_owner_native_jsonl_fragment_references(
+    tmp_path: Path,
+) -> None:
+    bundle = _bundle()
+    bundle["governance_testament"]["status"] = "candidate"
+    bundle["governance_testament"].pop("ratification")
+    assertion = bundle["assertion_evidence"][0]
+    assertion["verification_state"] = "unverified"
+    assertion["evidence_references"] = [
+        evidence
+        for evidence in assertion["evidence_references"]
+        if evidence["evidence_type"] == "immutable_source_event"
+    ]
+    controlling_source = assertion["evidence_references"][0]["reference"]
+    assertion["evidence_references"][0]["reference"] = (
+        "receipt:parity-fixture:source-envelope.v1.jsonl#" + controlling_source
+    )
+    assertion["evidence_references"].append(
+        {
+            "evidence_id": "evidence:second-native-event",
+            "independence_group": "second-native-custody",
+            "evidence_type": "immutable_source_event",
+            "reference": bundle["source_envelopes"][1]["source_id"],
+            "body_hash": bundle["source_envelopes"][1]["body_hash"],
+        },
+    )
+    for event in bundle["normalized_events"]:
+        event["source_envelope_reference"] = (
+            "source-envelope.v1.jsonl#" + event["source_envelope_reference"]
+        )
+
+    result = compile_candidate_testament(
+        bundle,
+        output_dir=tmp_path / "candidate-owner-native",
+        max_units=100,
+    )
+    assert result.receipt["ready_for_owner_ratification"] is True
 
 
 def test_snapshot_artifact_references_materialize_only_at_exact_digest(

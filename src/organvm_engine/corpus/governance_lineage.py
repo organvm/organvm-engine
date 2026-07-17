@@ -88,6 +88,13 @@ COVERAGE_STATUSES = (
     "missing_expected",
     "owner_blocked",
 )
+READINESS_DEBT_FIELDS = (
+    "unresolved_blockers",
+    "quarantines",
+    "missing_requirements",
+    "citation_debt",
+    "incomplete_predicates",
+)
 _DIGEST_PATTERN = re.compile(r"^sha256:[a-f0-9]{64}$")
 
 
@@ -180,7 +187,8 @@ def _validate_coverage_semantics(coverage: Mapping[str, Any]) -> None:
         owner_source_ids.add(_required_text(residual, "source_id"))
     if owner_source_ids != residual_source_ids:
         raise ValueError("coverage residual owners do not mirror non-parsed sources")
-    computed_ready = computed_exact_all and not residual_source_ids
+    readiness_debt = [item for field in READINESS_DEBT_FIELDS for item in coverage.get(field, [])]
+    computed_ready = computed_exact_all and not residual_source_ids and not readiness_debt
     if coverage.get("ready") is not computed_ready:
         raise ValueError("coverage ready disagrees with source classifications")
 
@@ -303,28 +311,34 @@ def validate_bundle_headers(bundle: Mapping[str, Any]) -> None:
         field_name="node self-image set",
     )
     image_ids = [
-        _required_text(image, "node_id")
-        for image in self_images
-        if isinstance(image, Mapping)
+        _required_text(image, "node_id") for image in self_images if isinstance(image, Mapping)
     ]
     if len(image_ids) != len(self_images):
         raise ValueError("node self-image set images must be objects")
-    exact_one = (
-        len(image_ids) == len(set(image_ids))
-        and sorted(image_ids) == sorted(str(value) for value in registered_node_ids)
+    exact_one = len(image_ids) == len(set(image_ids)) and sorted(image_ids) == sorted(
+        str(value) for value in registered_node_ids
     )
     counts = self_image_set.get("counts")
-    if not isinstance(counts, Mapping) or counts.get("registered") != len(
-        registered_node_ids,
-    ) or counts.get("exported") != len(self_images):
+    if (
+        not isinstance(counts, Mapping)
+        or counts.get("registered")
+        != len(
+            registered_node_ids,
+        )
+        or counts.get("exported") != len(self_images)
+    ):
         raise ValueError("node self-image set counts are inconsistent")
     readiness = self_image_set.get("readiness")
     if not isinstance(readiness, Mapping):
         raise ValueError("node self-image set readiness is missing")
     if not exact_one or readiness.get("exact_all") is not True:
         raise ValueError("node self-image set exact_one is inconsistent")
-    if readiness.get("ready") is not True or readiness.get("status") != "ready":
-        raise ValueError("node self-image set is not ready")
+    readiness_debt = [item for field in READINESS_DEBT_FIELDS for item in readiness.get(field, [])]
+    computed_ready = exact_one and not readiness_debt
+    if readiness.get("ready") is not computed_ready or readiness.get("status") != (
+        "ready" if computed_ready else "blocked"
+    ):
+        raise ValueError("node self-image set readiness is inconsistent")
 
 
 def _units(value: Any) -> list[Any]:
@@ -505,9 +519,7 @@ def _normalize_event(unit: Mapping[str, Any]) -> dict[str, Any]:
     native_identifiers = identity_basis.get("native_identifiers")
     if not isinstance(native_identifiers, Mapping) or not native_identifiers:
         raise ValueError("missing_event_native_identifiers")
-    if event["identity_algorithm"] != (
-        "sha256-canonical-json-native-identity-role-content-v1"
-    ):
+    if event["identity_algorithm"] != ("sha256-canonical-json-native-identity-role-content-v1"):
         raise ValueError("invalid_event_identity_algorithm")
     expected_event_id = "evt_" + content_digest(identity_basis).removeprefix("sha256:")
     if event["event_id"] != expected_event_id:
@@ -889,9 +901,7 @@ def finalize_state(
 ) -> dict[str, Any]:
     """Enforce endpoints, controlling operator authority, and explicit adoption."""
     finalized = deepcopy(state)
-    source_envelopes = {
-        source["source_id"]: source for source in finalized["source_envelopes"]
-    }
+    source_envelopes = {source["source_id"]: source for source in finalized["source_envelopes"]}
     valid_nodes: list[dict[str, Any]] = []
     for index, node in enumerate(finalized["nodes"]):
         source = source_envelopes.get(node["source_envelope_id"])
@@ -923,9 +933,7 @@ def finalize_state(
     finalized["edges"] = valid_edges
     adopted = _adopted_artifacts(finalized)
     assertions = {assertion["assertion_id"]: assertion for assertion in finalized["assertions"]}
-    normalized_events = {
-        event["event_id"]: event for event in finalized["normalized_events"]
-    }
+    normalized_events = {event["event_id"]: event for event in finalized["normalized_events"]}
 
     active_directives: list[dict[str, Any]] = []
     for index, directive in enumerate(finalized["directives"]):
@@ -972,8 +980,7 @@ def finalize_state(
             matching_nodes = [
                 node
                 for node in nodes.values()
-                if node["source_envelope_id"] == source_id
-                and node["lane"] == "operator_intent"
+                if node["source_envelope_id"] == source_id and node["lane"] == "operator_intent"
             ]
             if (
                 normalized is None
@@ -1012,9 +1019,7 @@ def finalize_state(
             continue
         citation_ids = testament.get("citations", [])
         resolved_assertions = [
-            assertions[citation_id]
-            for citation_id in citation_ids
-            if citation_id in assertions
+            assertions[citation_id] for citation_id in citation_ids if citation_id in assertions
         ]
         assertion_reference = ratification.get("assertion_evidence_reference")
         operator_assertions = [
@@ -1081,9 +1086,7 @@ def finalize_state(
         active_ideals.append({**ideal, "controlling_node_id": controlling_node_id})
     active_ideals.sort(key=lambda item: item["ideal_form_id"])
     finalized["ideal_forms"] = active_ideals
-    ideals_by_id = {
-        wrapper["ideal_form_id"]: wrapper["ideal_form"] for wrapper in active_ideals
-    }
+    ideals_by_id = {wrapper["ideal_form_id"]: wrapper["ideal_form"] for wrapper in active_ideals}
     valid_self_images: list[dict[str, Any]] = []
     for index, image in enumerate(finalized["self_images"]):
         image_valid = True
@@ -1097,12 +1100,9 @@ def finalize_state(
                 break
             predicates = ideal["predicates"]
             expected_predicates = sorted(str(item["predicate_id"]) for item in predicates)
-            expected_receipts = {
-                str(item["receipt_reference"]) for item in predicates
-            }
+            expected_receipts = {str(item["receipt_reference"]) for item in predicates}
             expected_distance = (
-                len(predicates)
-                - sum(item["result"] == "pass" for item in predicates)
+                len(predicates) - sum(item["result"] == "pass" for item in predicates)
             ) / len(predicates)
             evidence_references = active_form.get("evidence_references")
             if (

@@ -685,19 +685,17 @@ class IcebergAtlasCompiler:
                 incomplete_ideal_predicates,
             ),
         }
+        debt_fields = (
+            "unresolved_blockers",
+            "quarantines",
+            "missing_requirements",
+            "citation_debt",
+            "incomplete_predicates",
+        )
         readiness["ready"] = bool(
             readiness["exact_all"]
             and all(predicate_results.values())
-            and not any(
-                readiness[field]
-                for field in (
-                    "unresolved_blockers",
-                    "quarantines",
-                    "missing_requirements",
-                    "citation_debt",
-                    "incomplete_predicates",
-                )
-            )
+            and not any(readiness[field] for field in debt_fields),
         )
         readiness["status"] = "ready" if readiness["ready"] else "blocked"
         receipt_body = {

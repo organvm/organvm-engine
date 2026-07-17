@@ -190,8 +190,7 @@ def _citation_debt(state: Mapping[str, Any]) -> dict[str, Any]:
                 },
             )
     for directive in state["directives"]:
-        ratification = directive["testament"].get("ratification", {})
-        assertion_id = ratification.get("assertion_evidence_reference")
+        assertion_id = directive.get("assertion_id")
         assertion = next(
             (item for item in state["assertions"] if item.get("assertion_id") == assertion_id),
             None,
@@ -322,44 +321,9 @@ def _compiled_lineage_graph(
 
 def _compiled_ideal_register(
     bundle: Mapping[str, Any],
-    state: Mapping[str, Any],
+    _state: Mapping[str, Any],
 ) -> dict[str, Any]:
-    source = bundle["ideal_form_register"]
-    ideal_forms = [deepcopy(wrapper["ideal_form"]) for wrapper in state["ideal_forms"]]
-    verified = sum(ideal["implementation_state"] == "verified" for ideal in ideal_forms)
-    blocked = sum(ideal["implementation_state"] == "blocked" for ideal in ideal_forms)
-    incomplete_predicates = sorted(
-        str(predicate["predicate_id"])
-        for ideal in ideal_forms
-        for predicate in ideal["predicates"]
-        if predicate["result"] != "pass"
-    )
-    ready = bool(ideal_forms) and verified == len(ideal_forms) and not incomplete_predicates
-    body = {
-        **{
-            key: deepcopy(value)
-            for key, value in source.items()
-            if key not in {"ideal_forms", "coverage", "readiness", "register_digest"}
-        },
-        "ideal_forms": [deepcopy(wrapper["ideal_form"]) for wrapper in state["ideal_forms"]],
-        "coverage": {
-            "registered": len(ideal_forms),
-            "verified": verified,
-            "blocked": blocked,
-            "incomplete": len(ideal_forms) - verified - blocked,
-        },
-        "readiness": {
-            "exact_all": True,
-            "unresolved_blockers": [],
-            "quarantines": [],
-            "missing_requirements": [],
-            "citation_debt": [],
-            "incomplete_predicates": incomplete_predicates,
-            "ready": ready,
-            "status": "ready" if ready else "incomplete",
-        },
-    }
-    return {**body, "register_digest": content_digest(body)}
+    return deepcopy(bundle["ideal_form_register"])
 
 
 def _atlas_timeline(nodes: list[dict[str, Any]], lane: str) -> list[dict[str, Any]]:
@@ -451,7 +415,7 @@ def _readiness_requirements(
         missing.append("source_coverage_ready")
     image_set = bundle["node_self_image_set"]
     image_readiness = image_set.get("readiness", {})
-    if image_readiness.get("exact_all") is not True or image_readiness.get("ready") is not True:
+    if image_readiness.get("exact_all") is not True:
         missing.append("exact_one_self_images")
     if len(state["self_images"]) != len(image_set["registered_node_ids"]):
         missing.append("complete_self_images")
@@ -598,10 +562,7 @@ class IcebergAtlasCompiler:
                 cursor_path=cursor_path,
             )
 
-        finalized = finalize_state(
-            state,
-            source_ready=bundle["coverage"].get("ready") is True,
-        )
+        finalized = finalize_state(state)
         public_core, detail_core = _render_core(bundle, finalized)
         missing_requirements = detail_core["readiness"]["missing_requirements"]
         if missing_requirements and strict:
@@ -621,6 +582,7 @@ class IcebergAtlasCompiler:
         artifact_digest = str(public_core["atlas_digest"])
         ideal_register = detail_core["ideal_form_register"]
         coverage = bundle["coverage"]
+        ideal_readiness = ideal_register.get("readiness", {})
         self_image_readiness = bundle["node_self_image_set"].get("readiness", {})
         predicate_results = {
             "source_envelopes_resolved": bool(finalized["source_envelopes"])
@@ -658,29 +620,35 @@ class IcebergAtlasCompiler:
         ]
         readiness = {
             "exact_all": bool(coverage.get("exact_all"))
+            and ideal_readiness.get("exact_all") is True
             and self_image_readiness.get("exact_all") is True
             and not finalized["quarantine"],
             "unresolved_blockers": debt_values(
                 coverage.get("unresolved_blockers"),
+                ideal_readiness.get("unresolved_blockers"),
                 self_image_readiness.get("unresolved_blockers"),
             ),
             "quarantines": debt_values(
                 coverage.get("quarantines"),
+                ideal_readiness.get("quarantines"),
                 self_image_readiness.get("quarantines"),
                 quarantine_ids,
             ),
             "missing_requirements": debt_values(
                 coverage.get("missing_requirements"),
+                ideal_readiness.get("missing_requirements"),
                 self_image_readiness.get("missing_requirements"),
                 missing_requirements,
             ),
             "citation_debt": debt_values(
                 coverage.get("citation_debt"),
+                ideal_readiness.get("citation_debt"),
                 self_image_readiness.get("citation_debt"),
                 public_core["citation_debt"],
             ),
             "incomplete_predicates": debt_values(
                 coverage.get("incomplete_predicates"),
+                ideal_readiness.get("incomplete_predicates"),
                 self_image_readiness.get("incomplete_predicates"),
                 incomplete_ideal_predicates,
             ),

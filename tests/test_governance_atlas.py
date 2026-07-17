@@ -394,14 +394,14 @@ def _bundle() -> dict:
                             "statement": "Two unchanged renders are byte-identical.",
                             "receipt_reference": "receipt:fixed-point-fixture",
                             "result": "pass",
-                            "evidence_references": ["receipt:fixed-point-fixture"],
+                            "evidence_references": ["evidence:fixed-point-fixture"],
                         },
                         {
                             "predicate_id": "IF-002",
                             "statement": "Every owner has completed the second pass.",
                             "receipt_reference": "receipt:owner-pass-fixture",
                             "result": "pass",
-                            "evidence_references": ["receipt:owner-pass-fixture"],
+                            "evidence_references": ["evidence:owner-pass-fixture"],
                         },
                     ],
                     "assertion_evidence_references": ["assertion:authority-fixture"],
@@ -410,6 +410,7 @@ def _bundle() -> dict:
                         "receipt_references": [
                             "receipt:fixed-point-fixture",
                             "receipt:owner-pass-fixture",
+                            "receipt:additional-derivation-context",
                         ],
                     },
                     "receipt_target": "receipt:governance-atlas",
@@ -748,10 +749,31 @@ def test_allow_blocked_materializes_honest_atlas_without_verified_event(
     assert result.receipt["readiness"]["ready"] is False
     assert result.receipt["readiness"]["status"] == "blocked"
     assert "source_coverage_ready" in result.receipt["readiness"]["missing_requirements"]
+    false_gaps = {
+        "ratified_governance_testament",
+        "receipt_backed_ideal_forms",
+        "zero_compiler_quarantine",
+        "exact_one_self_images",
+    }
+    assert false_gaps.isdisjoint(result.receipt["readiness"]["missing_requirements"])
     assert result.public_path.is_file()
     assert result.detail_path.is_file()
     assert result.receipt_path.is_file()
     assert spine.snapshot()["event_count"] == 0
+    public = json.loads(result.public_path.read_text(encoding="utf-8"))
+    detail = json.loads(result.detail_path.read_text(encoding="utf-8"))
+    expected_ideal_ids = sorted(
+        ideal["ideal_form_id"]
+        for ideal in bundle["ideal_form_register"]["ideal_forms"]
+    )
+    assert detail["governance_testament"] == bundle["governance_testament"]
+    assert detail["ideal_form_register"] == bundle["ideal_form_register"]
+    assert public["ideal_forms"] == expected_ideal_ids
+    assert public["coverage"]["ideal_form_count"] == len(expected_ideal_ids)
+    assert (
+        result.receipt["ideal_form_register"]["digest"]
+        == bundle["ideal_form_register"]["register_digest"]
+    )
 
     before = {
         path: path.read_bytes()
@@ -845,6 +867,32 @@ def test_ratification_fails_when_an_immutable_operator_event_is_missing(
     }
 
 
+def test_ratification_resolves_owner_native_jsonl_fragment_references(
+    tmp_path: Path,
+) -> None:
+    bundle = _bundle()
+    for authority_event in bundle["governance_testament"]["ratification"][
+        "authority_events"
+    ]:
+        authority_event["source_envelope_reference"] = (
+            "receipt:parity-fixture:source-envelope.v1.jsonl#"
+            + authority_event["source_envelope_reference"]
+        )
+    for event in bundle["normalized_events"]:
+        event["source_envelope_reference"] = (
+            "source-envelope.v1.jsonl#" + event["source_envelope_reference"]
+        )
+    immutable_event = bundle["assertion_evidence"][0]["evidence_references"][0]
+    immutable_event["reference"] = (
+        "receipt:parity-fixture:source-envelope.v1.jsonl#"
+        + immutable_event["reference"]
+    )
+
+    _, _, result = _compile(tmp_path, bundle)
+
+    assert result.receipt["readiness"]["ready"] is True
+
+
 def test_handwritten_ideal_status_cannot_override_predicate_receipts(
     tmp_path: Path,
 ) -> None:
@@ -865,16 +913,38 @@ def test_handwritten_ideal_status_cannot_override_predicate_receipts(
     }
 
 
-def test_self_image_ideal_state_must_match_predicate_receipts(tmp_path: Path) -> None:
+def test_self_image_active_ideal_form_is_node_local_owner_state(tmp_path: Path) -> None:
     bundle = _bundle()
     active_form = bundle["node_self_image_set"]["self_images"][0]["active_ideal_forms"][0]
-    active_form["implementation_state"] = "partial"
+    active_form["form_id"] = "ideal:owner-native-node-state"
     _refresh_artifact_digest(bundle, "node_self_image_set", "set_digest")
+
+    _, _, result = _compile(tmp_path, bundle)
+    detail = json.loads(result.detail_path.read_text(encoding="utf-8"))
+
+    assert result.receipt["readiness"]["ready"] is True
+    assert (
+        detail["node_self_image_set"]["self_images"][0]["active_ideal_forms"][0]["form_id"]
+        == "ideal:owner-native-node-state"
+    )
+
+
+def test_ratified_testament_and_ideal_register_must_cover_the_same_ids(
+    tmp_path: Path,
+) -> None:
+    bundle = _bundle()
+    bundle["governance_testament"]["ideal_form_references"].append(
+        "ideal-form:missing-from-register",
+    )
+    candidate = deepcopy(bundle["governance_testament"])
+    candidate["status"] = "candidate"
+    candidate.pop("ratification", None)
+    bundle["governance_testament"]["ratification"]["candidate_digest"] = content_digest(candidate)
 
     with pytest.raises(ValueError, match="zero_compiler_quarantine"):
         _compile(tmp_path, bundle)
     cursor = json.loads((tmp_path / "cursor.json").read_text())
-    assert "self_image_ideal_state_not_receipt_derived" in {
+    assert "ratified_ideal_register_mismatch" in {
         item["error_code"] for item in cursor["state"]["quarantine"]
     }
 

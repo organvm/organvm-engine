@@ -722,9 +722,7 @@ def _normalize_ideal_form(unit: Mapping[str, Any]) -> dict[str, Any]:
             _required_text(predicate, field_name)
         if predicate["result"] not in {"pass", "fail", "blocked"}:
             raise ValueError("invalid_predicate_result")
-        evidence_references = _required_list(predicate, "evidence_references")
-        if predicate["receipt_reference"] not in evidence_references:
-            raise ValueError("predicate_receipt_not_evidence_backed")
+        _required_list(predicate, "evidence_references")
         verified += predicate["result"] == "pass"
         blocked = blocked or predicate["result"] == "blocked"
     total = len(predicates)
@@ -749,9 +747,17 @@ def _normalize_ideal_form(unit: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("missing_predicate_derivation")
     if derivation.get("algorithm") != "predicate-receipt-status-v1":
         raise ValueError("invalid_predicate_derivation")
-    receipt_references = _required_list(derivation, "receipt_references")
-    expected_receipts = sorted(str(predicate["receipt_reference"]) for predicate in predicates)
-    if sorted(str(reference) for reference in receipt_references) != expected_receipts:
+    receipt_reference_values = _required_list(derivation, "receipt_references")
+    if any(
+        not isinstance(reference, str) or not reference
+        for reference in receipt_reference_values
+    ):
+        raise ValueError("invalid_predicate_derivation_receipt")
+    receipt_references = set(receipt_reference_values)
+    if len(receipt_references) != len(receipt_reference_values):
+        raise ValueError("duplicate_predicate_derivation_receipt")
+    expected_receipts = {str(predicate["receipt_reference"]) for predicate in predicates}
+    if not expected_receipts.issubset(receipt_references):
         raise ValueError("predicate_derivation_receipts_incomplete")
     _required_list(ideal, "residual_gaps")
     return {"ideal_form_id": ideal["ideal_form_id"], "ideal_form": ideal}
@@ -888,24 +894,26 @@ def _assertion_resolves_source(
     source: Mapping[str, Any],
 ) -> bool:
     source_id = str(source["source_id"])
-    accepted_references = {source_id, f"source-envelope:{source_id}"}
     for evidence in assertion.get("evidence_references", []):
         if not isinstance(evidence, Mapping):
             continue
         if (
             evidence.get("evidence_type") == "immutable_source_event"
-            and evidence.get("reference") in accepted_references
+            and _source_id_from_reference(evidence.get("reference")) == source_id
             and evidence.get("body_hash") == source.get("body_hash")
         ):
             return True
     return False
 
 
-def finalize_state(
-    state: dict[str, Any],
-    *,
-    source_ready: bool,
-) -> dict[str, Any]:
+def _source_id_from_reference(value: Any) -> str:
+    reference = str(value)
+    if "#" in reference:
+        reference = reference.rsplit("#", 1)[-1]
+    return reference.removeprefix("source-envelope:")
+
+
+def finalize_state(state: dict[str, Any]) -> dict[str, Any]:
     """Enforce endpoints, controlling operator authority, and explicit adoption."""
     finalized = deepcopy(state)
     source_envelopes = {source["source_id"]: source for source in finalized["source_envelopes"]}
@@ -948,9 +956,6 @@ def finalize_state(
         if testament["status"] != "ratified":
             _diagnose(finalized, "directive", index, testament, "testament_not_ratified")
             continue
-        if not source_ready:
-            _diagnose(finalized, "directive", index, testament, "source_coverage_not_ready")
-            continue
         ratification = testament.get("ratification")
         if not isinstance(ratification, Mapping):
             _diagnose(finalized, "directive", index, testament, "missing_ratification")
@@ -982,8 +987,10 @@ def finalize_state(
                 authority_valid = False
                 break
             normalized = normalized_events.get(str(authority_event.get("event_id", "")))
-            source_id = authority_event.get("source_envelope_reference")
-            source = source_envelopes.get(str(source_id))
+            source_id = _source_id_from_reference(
+                authority_event.get("source_envelope_reference"),
+            )
+            source = source_envelopes.get(source_id)
             matching_nodes = [
                 node
                 for node in nodes.values()
@@ -996,7 +1003,10 @@ def finalize_state(
                 or authority_event.get("role") != "operator"
                 or authority_event.get("authority_class") != "operator_intent"
                 or authority_event.get("content_hash") != source.get("body_hash")
-                or normalized.get("source_envelope_reference") != source_id
+                or _source_id_from_reference(
+                    normalized.get("source_envelope_reference"),
+                )
+                != source_id
                 or normalized.get("authority_class") != "operator_intent"
                 or normalized.get("normalized_role") != "operator"
                 or normalized.get("identity_basis", {}).get("content_hash")
@@ -1029,10 +1039,14 @@ def finalize_state(
             assertions[citation_id] for citation_id in citation_ids if citation_id in assertions
         ]
         assertion_reference = ratification.get("assertion_evidence_reference")
+        assertion_reference_is_id = assertion_reference in assertions
         operator_assertions = [
             assertion
             for assertion in resolved_assertions
-            if assertion["assertion_id"] == assertion_reference
+            if (
+                not assertion_reference_is_id
+                or assertion["assertion_id"] == assertion_reference
+            )
             and assertion["assertion_class"] == "operator_directive"
             and _assertion_resolves_source(assertion, source)
         ]
@@ -1044,7 +1058,7 @@ def finalize_state(
             for evidence in assertion.get("evidence_references", [])
             if isinstance(evidence, Mapping)
         )
-        if len(resolved_assertions) != len(citation_ids) or not operator_assertions:
+        if len(operator_assertions) != 1:
             _diagnose(
                 finalized,
                 "directive",
@@ -1062,78 +1076,44 @@ def finalize_state(
                 "constitutional_assertion_unresolved",
             )
             continue
-        active_directives.append({**directive, "controlling_node_id": controlling["node_id"]})
+        active_directives.append(
+            {
+                **directive,
+                "controlling_node_id": controlling["node_id"],
+                "assertion_id": operator_assertions[0]["assertion_id"],
+            },
+        )
     finalized["directives"] = active_directives
 
     controlling_by_ideal: dict[str, str] = {}
     for directive in active_directives:
         for ideal_id in directive["testament"].get("ideal_form_references", []):
             controlling_by_ideal[str(ideal_id)] = directive["controlling_node_id"]
+    registered_ideal_ids = {
+        str(wrapper["ideal_form_id"]) for wrapper in finalized["ideal_forms"]
+    }
+    if active_directives and registered_ideal_ids != set(controlling_by_ideal):
+        _diagnose(
+            finalized,
+            "ideal_form_register",
+            0,
+            {
+                "registered_ideal_ids": sorted(registered_ideal_ids),
+                "ratified_ideal_ids": sorted(controlling_by_ideal),
+            },
+            "ratified_ideal_register_mismatch",
+        )
 
     active_ideals: list[dict[str, Any]] = []
     for index, ideal in enumerate(finalized["ideal_forms"]):
         ideal_id = ideal["ideal_form_id"]
-        ideal_document = ideal["ideal_form"]
         controlling_node_id = controlling_by_ideal.get(ideal_id)
         if controlling_node_id is None:
             _diagnose(finalized, "ideal_form", index, ideal, "ideal_not_ratified")
             continue
-        if any(
-            source_id not in source_envelopes
-            for source_id in ideal_document["source_envelope_references"]
-        ):
-            _diagnose(finalized, "ideal_form", index, ideal, "ideal_source_unresolved")
-            continue
-        if any(
-            assertion_id not in assertions
-            for assertion_id in ideal_document["assertion_evidence_references"]
-        ):
-            _diagnose(finalized, "ideal_form", index, ideal, "ideal_assertion_unresolved")
-            continue
         active_ideals.append({**ideal, "controlling_node_id": controlling_node_id})
     active_ideals.sort(key=lambda item: item["ideal_form_id"])
     finalized["ideal_forms"] = active_ideals
-    ideals_by_id = {wrapper["ideal_form_id"]: wrapper["ideal_form"] for wrapper in active_ideals}
-    valid_self_images: list[dict[str, Any]] = []
-    for index, image in enumerate(finalized["self_images"]):
-        image_valid = True
-        for active_form in image["active_ideal_forms"]:
-            if not isinstance(active_form, Mapping):
-                image_valid = False
-                break
-            ideal = ideals_by_id.get(str(active_form.get("form_id", "")))
-            if ideal is None:
-                image_valid = False
-                break
-            predicates = ideal["predicates"]
-            expected_predicates = sorted(str(item["predicate_id"]) for item in predicates)
-            expected_receipts = {str(item["receipt_reference"]) for item in predicates}
-            expected_distance = (
-                len(predicates) - sum(item["result"] == "pass" for item in predicates)
-            ) / len(predicates)
-            evidence_references = active_form.get("evidence_references")
-            if (
-                active_form.get("implementation_state") != ideal["implementation_state"]
-                or active_form.get("distance_to_ideal") != expected_distance
-                or sorted(str(value) for value in active_form.get("predicate_references", []))
-                != expected_predicates
-                or not isinstance(evidence_references, list)
-                or not expected_receipts.issubset(
-                    {str(value) for value in evidence_references},
-                )
-            ):
-                image_valid = False
-                break
-        if not image_valid:
-            _diagnose(
-                finalized,
-                "self_image",
-                index,
-                image,
-                "self_image_ideal_state_not_receipt_derived",
-            )
-        valid_self_images.append(image)
-    finalized["self_images"] = valid_self_images
     finalized["adopted_artifact_node_ids"] = sorted(adopted)
     return finalized
 

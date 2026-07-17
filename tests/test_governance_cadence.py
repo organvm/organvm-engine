@@ -305,6 +305,24 @@ def test_render_materializes_honest_blocked_atlas_and_proves_no_event(
     assert "source-unavailable-export" in projection["readiness"]["unresolved_blockers"]
     assert first_metrics["emitted_events"] == 0
     assert (args.output_dir / RENDER_OUTPUT_NAMES[4]).read_bytes() == b""
+    public = json.loads((args.output_dir / RENDER_OUTPUT_NAMES[0]).read_text(encoding="utf-8"))
+    detail = json.loads((args.output_dir / RENDER_OUTPUT_NAMES[1]).read_text(encoding="utf-8"))
+    receipt = json.loads((args.output_dir / RENDER_OUTPUT_NAMES[2]).read_text(encoding="utf-8"))
+    assert detail["governance_testament"] == bundle["governance_testament"]
+    assert detail["ideal_form_register"] == bundle["ideal_form_register"]
+    assert public["ideal_forms"] == [
+        ideal["ideal_form_id"] for ideal in bundle["ideal_form_register"]["ideal_forms"]
+    ]
+    assert (
+        receipt["ideal_form_register"]["digest"]
+        == bundle["ideal_form_register"]["register_digest"]
+    )
+    assert {
+        "ratified_governance_testament",
+        "receipt_backed_ideal_forms",
+        "zero_compiler_quarantine",
+        "exact_one_self_images",
+    }.isdisjoint(receipt["readiness"]["missing_requirements"])
 
     _runtime(
         monkeypatch,
@@ -334,6 +352,26 @@ def test_render_materializes_honest_blocked_atlas_and_proves_no_event(
     assert proof["emitted_events"] == 0
     assert proof["child_receipts"][0]["status"] == "skipped_completed"
     assert _output_bytes(args.output_dir, governed_names) == before
+
+
+def test_render_resolves_ratification_assertion_artifact_reference(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle = _bundle()
+    bundle["governance_testament"]["ratification"][
+        "assertion_evidence_reference"
+    ] = "assertion-evidence.v1.json"
+    args = _direct_inputs(tmp_path, bundle, render=True)
+    metrics = tmp_path / "metrics.json"
+    _runtime(monkeypatch, stage="render", bundle=bundle, metrics=metrics)
+
+    run_render(args)
+
+    detail = json.loads(
+        (args.output_dir / RENDER_OUTPUT_NAMES[1]).read_text(encoding="utf-8"),
+    )
+    assert detail["governance_testament"] == bundle["governance_testament"]
 
 
 def test_render_predicate_rejects_atlas_tampering(

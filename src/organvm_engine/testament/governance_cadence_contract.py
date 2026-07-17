@@ -349,6 +349,23 @@ def load_direct_bundle(
     if require_ratified:
         if paths.node_self_image_set is None:
             raise EngineCadenceError("render requires a direct node self-image set")
+        assertion_reference = str(
+            bundle["governance_testament"]["ratification"][
+                "assertion_evidence_reference"
+            ],
+        )
+        assertion_ids = {
+            str(assertion["assertion_id"])
+            for assertion in bundle["assertion_evidence"]
+        }
+        assertion_path = paths.assertion_evidence.as_posix()
+        if (
+            assertion_reference not in assertion_ids
+            and not assertion_path.endswith(assertion_reference)
+        ):
+            raise EngineCadenceError(
+                "ratification assertion reference does not resolve to the direct artifact",
+            )
         _require_contract(
             bundle["node_self_image_set"],
             SCHEMA_SELF_IMAGE_SET,
@@ -746,6 +763,7 @@ def validate_render_outputs(
         receipt.get("owner_reference") != owner_reference
         or receipt.get("generated_at") != runtime.snapshot_at
         or detail.get("coverage") != bundle["coverage"]
+        or detail.get("ideal_form_register") != bundle["ideal_form_register"]
         or {
             str(source["source_id"]): source
             for source in detail.get("source_envelopes", [])
@@ -763,12 +781,22 @@ def validate_render_outputs(
         != content_digest(detail["source_envelopes"])
         or receipt.get("assertion_evidence_set", {}).get("digest")
         != content_digest(detail["assertion_evidence"])
+        or receipt.get("ideal_form_register", {}).get("artifact_id")
+        != bundle["ideal_form_register"]["register_id"]
+        or receipt.get("ideal_form_register", {}).get("snapshot_id")
+        != bundle["ideal_form_register"]["snapshot_id"]
+        or receipt.get("ideal_form_register", {}).get("digest")
+        != bundle["ideal_form_register"]["register_digest"]
         or receipt.get("node_self_image_set", {}).get("digest")
         != bundle["node_self_image_set"]["set_digest"]
     ):
         raise EngineCadenceError("Atlas receipt does not bind its direct owner artifacts")
     timelines = public.get("timelines")
     zooms = public.get("zoom_levels")
+    ideal_form_ids = sorted(
+        str(ideal["ideal_form_id"])
+        for ideal in bundle["ideal_form_register"]["ideal_forms"]
+    )
     if (
         not isinstance(timelines, Mapping)
         or set(timelines) != {"operator_intent", "artifact"}
@@ -778,6 +806,8 @@ def validate_render_outputs(
         != {lane: len(timelines[lane]) for lane in ("operator_intent", "artifact")}
         or receipt.get("zoom_counts")
         != {level: len(zooms[level]) for level in ZOOM_LEVELS}
+        or public.get("ideal_forms") != ideal_form_ids
+        or public.get("coverage", {}).get("ideal_form_count") != len(ideal_form_ids)
     ):
         raise EngineCadenceError("Atlas timelines or zoom counts are inconsistent")
     readiness_value = receipt.get("readiness")

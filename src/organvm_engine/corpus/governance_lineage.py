@@ -335,8 +335,15 @@ def validate_bundle_headers(bundle: Mapping[str, Any]) -> None:
         raise ValueError("node self-image set exact_one is inconsistent")
     readiness_debt = [item for field in READINESS_DEBT_FIELDS for item in readiness.get(field, [])]
     computed_ready = exact_one and not readiness_debt
-    if readiness.get("ready") is not computed_ready or readiness.get("status") != (
-        "ready" if computed_ready else "blocked"
+    status = readiness.get("status")
+    if (
+        readiness.get("ready") is not computed_ready
+        or (computed_ready and status != "ready")
+        or (
+            not computed_ready
+            and status
+            not in {"blocked", "incomplete", "closed_with_owner_routed_debt"}
+        )
     ):
         raise ValueError("node self-image set readiness is inconsistent")
 

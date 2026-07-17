@@ -10,7 +10,11 @@ from pathlib import Path
 import pytest
 
 from organvm_engine.corpus.governance_bundle import load_materialized_snapshot_bundle
-from organvm_engine.corpus.governance_lineage import canonical_json, content_digest
+from organvm_engine.corpus.governance_lineage import (
+    canonical_json,
+    content_digest,
+    validate_bundle_headers,
+)
 from organvm_engine.events.spine import EventSpine, EventType
 from organvm_engine.testament.governance_compiler import compile_candidate_testament
 from organvm_engine.testament.iceberg_atlas import (
@@ -928,6 +932,17 @@ def test_self_image_set_must_cover_each_registered_node_exactly_once(
     _refresh_artifact_digest(bundle, "node_self_image_set", "set_digest")
     with pytest.raises(ValueError, match="exact_one"):
         _compile(tmp_path, bundle)
+
+
+def test_self_image_set_preserves_owner_routed_debt_without_aliasing_ready() -> None:
+    bundle = _bundle()
+    readiness = bundle["node_self_image_set"]["readiness"]
+    readiness["unresolved_blockers"] = ["owner:unavailable-export"]
+    readiness["ready"] = False
+    readiness["status"] = "closed_with_owner_routed_debt"
+    _refresh_artifact_digest(bundle, "node_self_image_set", "set_digest")
+
+    validate_bundle_headers(bundle)
 
 
 def test_candidate_pass_is_non_ratifying_bounded_and_idempotent(tmp_path: Path) -> None:

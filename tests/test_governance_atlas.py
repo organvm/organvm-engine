@@ -968,7 +968,7 @@ def test_candidate_pass_is_non_ratifying_bounded_and_idempotent(tmp_path: Path) 
     assert second.receipt_path.read_bytes() == receipt_before
 
     bundle["governance_testament"]["status"] = "ratified"
-    with pytest.raises(ValueError, match="refuses"):
+    with pytest.raises(ValueError, match="missing its ratification record"):
         compile_candidate_testament(bundle, output_dir=output, max_units=100)
 
     preverified = _bundle()

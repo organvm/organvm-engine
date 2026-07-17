@@ -226,6 +226,40 @@ def test_distill_compiles_candidate_then_proves_exact_skipped_child(
     assert _output_bytes(args.output_dir, governed_names) == before
 
 
+def test_distill_reprojects_exact_candidate_from_ratified_owner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle = _bundle()
+    args = _direct_inputs(tmp_path, bundle, render=False)
+    metrics = tmp_path / "metrics" / "ratified-distill.json"
+    _runtime(monkeypatch, stage="distill", bundle=bundle, metrics=metrics)
+
+    run_distill(args)
+
+    candidate = json.loads(
+        (args.output_dir / DISTILL_OUTPUT_NAMES[0]).read_text(encoding="utf-8"),
+    )
+    receipt = json.loads(
+        (args.output_dir / DISTILL_OUTPUT_NAMES[1]).read_text(encoding="utf-8"),
+    )
+    assert candidate["status"] == "candidate"
+    assert "ratification" not in candidate
+    assert (
+        content_digest(candidate)
+        == bundle["governance_testament"]["ratification"]["candidate_digest"]
+        == receipt["candidate_digest"]
+    )
+    _runtime(
+        monkeypatch,
+        stage="distill",
+        bundle=bundle,
+        metrics=metrics,
+        predicate=True,
+    )
+    assert_distill_predicate(args)
+
+
 def test_distill_predicate_rejects_candidate_receipt_tampering(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

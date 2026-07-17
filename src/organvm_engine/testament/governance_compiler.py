@@ -83,9 +83,10 @@ def compile_candidate_testament(
 ) -> CandidateCompileResult:
     """Compile reviewed native operator events into a non-ratified candidate.
 
-    This pass cannot create constitutional authority.  It proves only that a
-    candidate has immutable native-event ancestry and independently verified
-    operator-directive assertion evidence.  Ratification remains CORPVS-owned.
+    This pass cannot create constitutional authority. It either compiles the
+    current candidate or projects a CORPVS-ratified testament back to the exact
+    candidate digest already bound by its ratification record. Ratification
+    remains CORPVS-owned in both cases.
     """
     if max_units <= 0:
         raise ValueError("max_units must be positive")
@@ -99,8 +100,13 @@ def compile_candidate_testament(
         raise ValueError("invalid lineage graph")
     if not isinstance(testament_value, Mapping) or schema_id(testament_value) != SCHEMA_TESTAMENT:
         raise ValueError("invalid governance testament")
-    if testament_value.get("status") not in {"draft", "candidate"}:
-        raise ValueError("candidate pass refuses a ratified or superseded testament")
+    testament_status = testament_value.get("status")
+    if testament_status not in {"draft", "candidate", "ratified"}:
+        raise ValueError("candidate pass refuses a superseded testament")
+    ratified_input = testament_status == "ratified"
+    ratification = testament_value.get("ratification")
+    if ratified_input and not isinstance(ratification, Mapping):
+        raise ValueError("ratified testament is missing its ratification record")
     nodes = _required_list(lineage, "nodes")
     edges = _required_list(lineage, "edges")
     sources = _required_list(bundle, "source_envelopes")
@@ -162,16 +168,24 @@ def compile_candidate_testament(
         ):
             raise ValueError("invalid assertion evidence")
         assertion_id = _required_text(assertion, "assertion_id")
-        if assertion.get("verification_state") != "unverified":
+        verification_state = assertion.get("verification_state")
+        evidence = _required_list(assertion, "evidence_references")
+        constitutional_evidence = [
+            reference
+            for reference in evidence
+            if isinstance(reference, Mapping)
+            and reference.get("evidence_type") == "ratified_constitutional_record"
+        ]
+        if ratified_input:
+            if verification_state != "verified" or not constitutional_evidence:
+                raise ValueError(
+                    "ratified input requires verified constitutional assertion evidence",
+                )
+        elif verification_state != "unverified":
             raise ValueError(
                 "candidate assertion evidence must remain unverified until CORPVS ratification",
             )
-        evidence = _required_list(assertion, "evidence_references")
-        if any(
-            isinstance(reference, Mapping)
-            and reference.get("evidence_type") == "ratified_constitutional_record"
-            for reference in evidence
-        ):
+        if not ratified_input and constitutional_evidence:
             raise ValueError(
                 "candidate assertion evidence cannot predeclare a ratified constitutional record",
             )
@@ -244,6 +258,12 @@ def compile_candidate_testament(
     candidate = deepcopy(dict(testament_value))
     candidate["status"] = "candidate"
     candidate.pop("ratification", None)
+    if ratified_input:
+        assert isinstance(ratification, Mapping)
+        if ratification.get("candidate_digest") != content_digest(candidate):
+            raise ValueError(
+                "ratified testament does not bind its exact candidate projection",
+            )
     receipt = {
         "contract_name": CANDIDATE_RECEIPT_CONTRACT,
         "contract_version": 1,

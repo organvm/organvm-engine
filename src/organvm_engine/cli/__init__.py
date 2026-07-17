@@ -305,9 +305,11 @@ from organvm_engine.cli.study import (
 )
 from organvm_engine.cli.taxonomy import cmd_taxonomy_audit, cmd_taxonomy_classify
 from organvm_engine.cli.testament import (
+    cmd_testament_candidate,
     cmd_testament_cascade,
     cmd_testament_catalog,
     cmd_testament_gallery,
+    cmd_testament_iceberg_atlas,
     cmd_testament_play,
     cmd_testament_record_session,
     cmd_testament_render,
@@ -2075,6 +2077,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Custom spine JSONL path",
     )
 
+    testament_candidate = testament_sub.add_parser(
+        "candidate-testament",
+        help="Compile reviewed native events into a non-ratified candidate",
+    )
+    testament_candidate.add_argument("--snapshot-bundle", required=True)
+    testament_candidate.add_argument("--output-dir", required=True)
+    testament_candidate.add_argument("--max-units", type=int, default=10_000)
+    testament_candidate.add_argument("--max-input-bytes", type=int, default=16_777_216)
+    testament_candidate.add_argument("--max-artifact-bytes", type=int, default=16_777_216)
+    testament_candidate.add_argument("--write", action="store_true")
+
+    testament_atlas = testament_sub.add_parser(
+        "iceberg-atlas",
+        help="Compile the final evidence-gated governance Iceberg Atlas",
+    )
+    testament_atlas.add_argument("--snapshot-bundle", required=True)
+    testament_atlas.add_argument("--output-dir", required=True)
+    testament_atlas.add_argument("--cursor")
+    testament_atlas.add_argument("--event-spine", required=True)
+    testament_atlas.add_argument("--actor", required=True)
+    testament_atlas.add_argument("--source-organ", required=True)
+    testament_atlas.add_argument("--source-repo", required=True)
+    testament_atlas.add_argument("--max-children", type=int, default=1_000)
+    testament_atlas.add_argument("--max-input-bytes", type=int, default=16_777_216)
+    testament_atlas.add_argument("--max-artifact-bytes", type=int, default=16_777_216)
+    testament_atlas.add_argument("--write", action="store_true")
+
     # ledger (Testament Protocol — hash-linked event chain)
     ledger = sub.add_parser(
         "ledger",
@@ -3622,6 +3651,8 @@ def main() -> int:
     if args.command == "testament":
         testament_dispatch = {
             "status": cmd_testament_status,
+            "candidate-testament": cmd_testament_candidate,
+            "iceberg-atlas": cmd_testament_iceberg_atlas,
             "render": cmd_testament_render,
             "cascade": cmd_testament_cascade,
             "catalog": cmd_testament_catalog,

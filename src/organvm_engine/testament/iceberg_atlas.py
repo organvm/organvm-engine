@@ -26,6 +26,7 @@ CURSOR_SCHEMA = "governance-atlas-cursor.v1"
 RECEIPT_SCHEMA = "governance-atlas-receipt.v1"
 PUBLIC_FILENAME = "iceberg-atlas.public.json"
 DETAIL_FILENAME = "iceberg-atlas.private.json"
+RECEIPT_FILENAME = "governance-atlas-receipt.json"
 
 _PRIVATE_KEY_PARTS = ("secret", "token", "cookie", "raw_body", "private_custody")
 
@@ -40,6 +41,7 @@ class AtlasCompileResult:
     cursor_path: Path
     public_path: Path | None = None
     detail_path: Path | None = None
+    receipt_path: Path | None = None
     receipt: dict[str, Any] | None = None
 
 
@@ -189,11 +191,24 @@ def _citation_debt(state: Mapping[str, Any]) -> dict[str, Any]:
             )
     for directive in state["directives"]:
         ratification = directive["testament"].get("ratification", {})
+        assertion_id = ratification.get("assertion_evidence_reference")
+        assertion = next(
+            (
+                item
+                for item in state["assertions"]
+                if item.get("assertion_id") == assertion_id
+            ),
+            None,
+        )
         groups = {
-            str(ratification.get("authority_event_reference", "")),
-            str(ratification.get("constitutional_record_reference", "")),
+            str(reference.get("independence_group"))
+            for reference in (
+                assertion.get("evidence_references", [])
+                if isinstance(assertion, Mapping)
+                else []
+            )
+            if isinstance(reference, Mapping) and reference.get("independence_group")
         }
-        groups.discard("")
         missing = max(2 - len(groups), 0)
         if missing:
             debt.append(
@@ -316,25 +331,212 @@ def _compiled_ideal_register(
     state: Mapping[str, Any],
 ) -> dict[str, Any]:
     source = bundle["ideal_form_register"]
-    return {
-        "contract_name": source["contract_name"],
-        "contract_version": source["contract_version"],
-        "register_id": source["register_id"],
-        "generated_at": source["generated_at"],
-        "frozen_snapshot_id": source["frozen_snapshot_id"],
+    ideal_forms = [deepcopy(wrapper["ideal_form"]) for wrapper in state["ideal_forms"]]
+    verified = sum(ideal["implementation_state"] == "verified" for ideal in ideal_forms)
+    blocked = sum(ideal["implementation_state"] == "blocked" for ideal in ideal_forms)
+    incomplete_predicates = sorted(
+        str(predicate["predicate_id"])
+        for ideal in ideal_forms
+        for predicate in ideal["predicates"]
+        if predicate["result"] != "pass"
+    )
+    ready = bool(ideal_forms) and verified == len(ideal_forms) and not incomplete_predicates
+    body = {
+        **{
+            key: deepcopy(value)
+            for key, value in source.items()
+            if key not in {"ideal_forms", "coverage", "readiness", "register_digest"}
+        },
         "ideal_forms": [deepcopy(wrapper["ideal_form"]) for wrapper in state["ideal_forms"]],
+        "coverage": {
+            "registered": len(ideal_forms),
+            "verified": verified,
+            "blocked": blocked,
+            "incomplete": len(ideal_forms) - verified - blocked,
+        },
+        "readiness": {
+            "exact_all": True,
+            "unresolved_blockers": [],
+            "quarantines": [],
+            "missing_requirements": [],
+            "citation_debt": [],
+            "incomplete_predicates": incomplete_predicates,
+            "ready": ready,
+            "status": "ready" if ready else "incomplete",
+        },
     }
+    return {**body, "register_digest": content_digest(body)}
+
+
+def _atlas_timeline(nodes: list[dict[str, Any]], lane: str) -> list[dict[str, Any]]:
+    return sorted(
+        [
+            {
+                "entry_id": node["node_id"],
+                "event_reference": node["node_id"],
+                "occurred_at": node["occurred_at"],
+                "title": node["summary"],
+                "source_envelope_references": [node["source_envelope_id"]],
+                "evidence_references": [node["source_envelope_id"]],
+            }
+            for node in nodes
+            if node["lane"] == lane
+        ],
+        key=lambda item: (item["occurred_at"], item["entry_id"]),
+    )
+
+
+def _atlas_zooms(
+    nodes: list[dict[str, Any]],
+    *,
+    self_image_ids: set[str],
+    ideal_form_ids: list[str],
+) -> dict[str, list[dict[str, Any]]]:
+    zooms: dict[str, list[dict[str, Any]]] = {}
+    for level in ZOOM_LEVELS:
+        values: list[dict[str, Any]] = []
+        for node in nodes:
+            if node["_zoom_level"] != level:
+                continue
+            entity_id = node.get("metadata", {}).get("entity_id")
+            if not isinstance(entity_id, str) or entity_id not in self_image_ids:
+                raise ValueError(f"lineage node {node['node_id']} has no resolved self-image")
+            values.append(
+                {
+                    "node_id": node["node_id"],
+                    "title": node["summary"],
+                    "summary": node["summary"],
+                    "self_image_reference": entity_id,
+                    "ideal_form_references": ideal_form_ids,
+                    "evidence_references": [node["source_envelope_id"]],
+                },
+            )
+        zooms[level] = sorted(values, key=lambda item: item["node_id"])
+    return zooms
+
+
+def _atlas_relationships(state: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return sorted(
+        [
+            {
+                "relationship_id": edge["edge_id"],
+                "from_node_id": edge["from_node"],
+                "to_node_id": edge["to_node"],
+                "relationship_type": edge["edge_type"],
+                "evidence_references": sorted(evidence_groups(edge)),
+            }
+            for edge in state["edges"]
+            if edge["review_state"] == "reviewed"
+        ],
+        key=lambda item: item["relationship_id"],
+    )
+
+
+def _readiness_requirements(
+    bundle: Mapping[str, Any],
+    state: Mapping[str, Any],
+    public: Mapping[str, Any],
+) -> list[str]:
+    missing: list[str] = []
+    if not state["directives"]:
+        missing.append("ratified_governance_testament")
+    if not state["ideal_forms"]:
+        missing.append("receipt_backed_ideal_forms")
+    if not public["timelines"]["operator_intent"]:
+        missing.append("operator_intent_timeline")
+    if not public["timelines"]["artifact"]:
+        missing.append("artifact_timeline")
+    for level in ZOOM_LEVELS:
+        if not public["zoom_levels"][level]:
+            missing.append(f"zoom_level:{level}")
+    if public["citation_debt"]:
+        missing.append("zero_citation_debt")
+    if state["quarantine"]:
+        missing.append("zero_compiler_quarantine")
+    if bundle["coverage"].get("ready") is not True:
+        missing.append("source_coverage_ready")
+    image_set = bundle["node_self_image_set"]
+    image_readiness = image_set.get("readiness", {})
+    if image_readiness.get("exact_all") is not True or image_readiness.get("ready") is not True:
+        missing.append("exact_one_self_images")
+    if len(state["self_images"]) != len(image_set["registered_node_ids"]):
+        missing.append("complete_self_images")
+    if not state["source_envelopes"]:
+        missing.append("source_envelopes")
+    if not state["assertions"]:
+        missing.append("verified_assertion_evidence")
+    if not public["relationships"]:
+        missing.append("reviewed_relationships")
+    if any(
+        wrapper["ideal_form"]["implementation_state"] != "verified"
+        or wrapper["ideal_form"]["residual_gaps"]
+        for wrapper in state["ideal_forms"]
+    ):
+        missing.append("complete_ideal_predicates")
+    return sorted(set(missing))
 
 
 def _render_core(bundle: Mapping[str, Any], state: Mapping[str, Any]) -> tuple[dict, dict]:
     nodes = state["nodes"]
     citation_debt = _citation_debt(state)
-    public = {
+    ideal_form_ids = sorted(wrapper["ideal_form_id"] for wrapper in state["ideal_forms"])
+    self_image_ids = {str(image["node_id"]) for image in state["self_images"]}
+    public_body = {
         "contract_name": "iceberg-atlas.v1",
+        "contract_version": 1,
+        "atlas_id": f"iceberg-atlas:{bundle['snapshot_id']}",
+        "snapshot_id": bundle["snapshot_id"],
+        "snapshot_digest": bundle["snapshot_digest"],
+        "generated_at": bundle["snapshot_at"],
+        "source_envelope_references": sorted(
+            str(source["source_id"]) for source in state["source_envelopes"]
+        ),
+        "assertion_evidence_references": sorted(
+            str(assertion["assertion_id"]) for assertion in state["assertions"]
+        ),
+        "timelines": {
+            "operator_intent": _atlas_timeline(nodes, "operator_intent"),
+            "artifact": _atlas_timeline(nodes, "artifact"),
+        },
+        "zoom_levels": _atlas_zooms(
+            nodes,
+            self_image_ids=self_image_ids,
+            ideal_form_ids=ideal_form_ids,
+        ),
+        "relationships": _atlas_relationships(state),
+        "ideal_forms": ideal_form_ids,
+        "self_images": sorted(self_image_ids),
+        "coverage": {
+            "exact_all": bool(bundle["coverage"]["exact_all"]) and not state["quarantine"],
+            "source_count": len(state["source_envelopes"]),
+            "event_count": len(bundle.get("normalized_events", nodes)),
+            "node_count": len(nodes),
+            "ideal_form_count": len(ideal_form_ids),
+        },
+        "citation_debt": sorted(
+            f"{item['unit_type']}:{item['unit_id']}" for item in citation_debt["items"]
+        ),
+        "digest_algorithm": "sha256-rfc8785-excluding-self-digest-v1",
+    }
+    public = {**public_body, "atlas_digest": content_digest(public_body)}
+    missing_requirements = _readiness_requirements(bundle, state, public)
+    testament = deepcopy(state["directives"][0]["testament"]) if state["directives"] else None
+    detail = {
+        "contract_name": "iceberg-atlas-detail.v1",
         "contract_version": 1,
         "snapshot_id": bundle["snapshot_id"],
         "generated_at": bundle["snapshot_at"],
-        "governance_testament": _testament_projection(state),
+        "governance_testament": testament,
+        "lineage_graph": _compiled_lineage_graph(bundle, state),
+        "ideal_form_register": _compiled_ideal_register(bundle, state),
+        "coverage": deepcopy(bundle["coverage"]),
+        "source_envelopes": deepcopy(state["source_envelopes"]),
+        "assertion_evidence": deepcopy(state["assertions"]),
+        "node_self_image_set": {
+            **deepcopy(bundle["node_self_image_set"]),
+            "self_images": deepcopy(state["self_images"]),
+        },
+        "atlas": deepcopy(public),
         "timelines": {
             "operator_intent": _timeline(nodes, "operator_intent"),
             "artifact": _timeline(nodes, "artifact"),
@@ -348,27 +550,14 @@ def _render_core(bundle: Mapping[str, Any], state: Mapping[str, Any]) -> tuple[d
         },
         "relationships": _relationship_views(state),
         "ideal_forms": _ideal_forms(state, citation_debt),
-        "coverage": _coverage_view(bundle["coverage"], state["quarantine"]),
-        "self_images": sorted(
-            [_self_image_summary(image) for image in state["self_images"]],
-            key=lambda item: item["node_id"],
-        ),
-        "citation_debt": citation_debt,
-    }
-    testament = deepcopy(state["directives"][0]["testament"]) if state["directives"] else None
-    detail = {
-        "contract_name": "iceberg-atlas-detail.v1",
-        "contract_version": 1,
-        "snapshot_id": bundle["snapshot_id"],
-        "generated_at": bundle["snapshot_at"],
-        "governance_testament": testament,
-        "lineage_graph": _compiled_lineage_graph(bundle, state),
-        "ideal_form_register": _compiled_ideal_register(bundle, state),
-        "coverage": deepcopy(bundle["coverage"]),
-        "self_images": deepcopy(state["self_images"]),
+        "governance_testament_projection": _testament_projection(state),
         "adopted_artifact_node_ids": deepcopy(state["adopted_artifact_node_ids"]),
         "citation_debt": citation_debt,
         "quarantine": deepcopy(state["quarantine"]),
+        "readiness": {
+            "missing_requirements": missing_requirements,
+            "ready": not missing_requirements,
+        },
     }
     return public, detail
 
@@ -392,7 +581,9 @@ class IcebergAtlasCompiler:
             raise ValueError("max_children must be positive")
         validate_bundle_headers(bundle)
         children = bundle_children(bundle)
-        input_digest = content_digest(bundle)
+        input_digest = str(
+            bundle.get("_snapshot_bundle_digest") or content_digest(bundle),
+        )
         cursor = self._load_cursor(cursor_path, bundle, input_digest, len(children))
         start = int(cursor["next_child"])
         stop = min(start + max_children, len(children))
@@ -412,45 +603,114 @@ class IcebergAtlasCompiler:
                 cursor_path=cursor_path,
             )
 
-        finalized = finalize_state(state)
-        public_core, detail_core = _render_core(bundle, finalized)
-        artifact_digest = content_digest(
-            {"public": public_core, "detail_digest": content_digest(detail_core)},
+        finalized = finalize_state(
+            state,
+            source_ready=bundle["coverage"].get("ready") is True,
         )
+        public_core, detail_core = _render_core(bundle, finalized)
+        missing_requirements = detail_core["readiness"]["missing_requirements"]
+        if missing_requirements:
+            cursor.update(
+                {
+                    "complete": False,
+                    "next_child": len(children),
+                    "state": finalized,
+                    "blocked_requirements": missing_requirements,
+                },
+            )
+            _write_if_changed(cursor_path, cursor)
+            raise ValueError(
+                "atlas strict readiness failed: " + ", ".join(missing_requirements),
+            )
+
+        artifact_digest = str(public_core["atlas_digest"])
         event = self._receipt_event(str(bundle["snapshot_id"]), input_digest, artifact_digest)
-        citation_debt = detail_core["citation_debt"]
-        receipt = {
+        ideal_register = detail_core["ideal_form_register"]
+        receipt_body = {
             "contract_name": RECEIPT_SCHEMA,
             "contract_version": 1,
+            "atlas_receipt_id": f"governance-atlas:{bundle['snapshot_id']}",
             "snapshot_id": bundle["snapshot_id"],
-            "snapshot_at": bundle["snapshot_at"],
-            "input_digest": input_digest,
-            "artifact_digest": artifact_digest,
-            "processing_complete": True,
-            "exact_all": public_core["coverage"]["atlas_exact_all"],
-            "ready": public_core["coverage"]["atlas_ready"],
-            "counts": {
-                "nodes": len(finalized["nodes"]),
-                "edges": len(finalized["edges"]),
-                "directives": len(finalized["directives"]),
-                "ideal_forms": len(finalized["ideal_forms"]),
-                "self_images": len(finalized["self_images"]),
-                "quarantined": len(finalized["quarantine"]),
+            "snapshot_digest": bundle["snapshot_digest"],
+            "owner_reference": self._receipt_identity.source_repo,
+            "generated_at": bundle["snapshot_at"],
+            "source_envelope_set": {
+                "artifact_id": f"source-envelopes:{bundle['snapshot_id']}",
+                "reference": "snapshot-bundle:#/source_envelopes",
+                "snapshot_id": bundle["snapshot_id"],
+                "digest": content_digest(finalized["source_envelopes"]),
+                "count": len(finalized["source_envelopes"]),
             },
-            "citation_debt": citation_debt,
-            "coverage_debt": public_core["coverage"]["coverage_debt"],
+            "assertion_evidence_set": {
+                "artifact_id": f"assertion-evidence:{bundle['snapshot_id']}",
+                "reference": "snapshot-bundle:#/assertion_evidence",
+                "snapshot_id": bundle["snapshot_id"],
+                "digest": content_digest(finalized["assertions"]),
+                "count": len(finalized["assertions"]),
+            },
+            "ideal_form_register": {
+                "artifact_id": ideal_register["register_id"],
+                "reference": f"{DETAIL_FILENAME}#/ideal_form_register",
+                "snapshot_id": bundle["snapshot_id"],
+                "digest": ideal_register["register_digest"],
+            },
+            "node_self_image_set": {
+                "artifact_id": bundle["node_self_image_set"]["set_id"],
+                "reference": "snapshot-bundle:#/node_self_image_set",
+                "snapshot_id": bundle["snapshot_id"],
+                "digest": bundle["node_self_image_set"]["set_digest"],
+                "count": len(finalized["self_images"]),
+            },
+            "iceberg_atlas": {
+                "artifact_id": public_core["atlas_id"],
+                "reference": PUBLIC_FILENAME,
+                "snapshot_id": bundle["snapshot_id"],
+                "digest": artifact_digest,
+            },
+            "timeline_counts": {
+                lane: len(public_core["timelines"][lane])
+                for lane in ("operator_intent", "artifact")
+            },
+            "zoom_counts": {
+                level: len(public_core["zoom_levels"][level]) for level in ZOOM_LEVELS
+            },
+            "predicate_results": {
+                "source_envelopes_resolved": True,
+                "assertions_verified": True,
+                "ideal_forms_complete": True,
+                "self_images_complete": True,
+                "timelines_complete": True,
+                "zooms_complete": True,
+                "atlas_digest_verified": True,
+            },
+            "readiness": {
+                "exact_all": True,
+                "unresolved_blockers": [],
+                "quarantines": [],
+                "missing_requirements": [],
+                "citation_debt": [],
+                "incomplete_predicates": [],
+                "ready": True,
+                "status": "ready",
+            },
+            "digest_algorithm": "sha256-rfc8785-excluding-self-digest-v1",
+        }
+        receipt = {**receipt_body, "receipt_digest": content_digest(receipt_body)}
+        detail = {
+            **detail_core,
+            "receipt": receipt,
             "event_spine": {
                 "event_id": event.event_id,
                 "sequence": event.sequence,
                 "hash": event.hash,
             },
         }
-        public = {**public_core, "receipt": receipt}
-        detail = {**detail_core, "receipt": receipt}
         public_path = output_dir / PUBLIC_FILENAME
         detail_path = output_dir / DETAIL_FILENAME
-        _write_if_changed(public_path, public)
+        receipt_path = output_dir / RECEIPT_FILENAME
+        _write_if_changed(public_path, public_core)
         _write_if_changed(detail_path, detail)
+        _write_if_changed(receipt_path, receipt)
 
         cursor.update(
             {
@@ -468,6 +728,7 @@ class IcebergAtlasCompiler:
             cursor_path=cursor_path,
             public_path=public_path,
             detail_path=detail_path,
+            receipt_path=receipt_path,
             receipt=receipt,
         )
 

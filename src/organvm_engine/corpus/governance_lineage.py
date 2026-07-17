@@ -9,16 +9,23 @@ documents remain available as exact projections.
 from __future__ import annotations
 
 import hashlib
-import json
+import re
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+import rfc8785
+
 SCHEMA_TESTAMENT = "governance-testament.v1"
 SCHEMA_LINEAGE = "lineage-graph.v1"
 SCHEMA_COVERAGE = "coverage-receipt.v1"
+SCHEMA_SOURCE_ENVELOPE = "source-envelope.v1"
+SCHEMA_NORMALIZED_EVENT = "normalized-event.v1"
+SCHEMA_ASSERTION_EVIDENCE = "assertion-evidence.v1"
 SCHEMA_SELF_IMAGE = "node-self-image.v1"
+SCHEMA_SELF_IMAGE_SET = "node-self-image-set.v1"
 SCHEMA_IDEAL_FORM_REGISTER = "ideal-form-register.v1"
+SCHEMA_SNAPSHOT_BUNDLE = "governance-snapshot-bundle.v1"
 
 AUTHORITY_LANES = {"operator_intent", "artifact"}
 AUTHORITY_CLASSES = {
@@ -81,11 +88,12 @@ COVERAGE_STATUSES = (
     "missing_expected",
     "owner_blocked",
 )
+_DIGEST_PATTERN = re.compile(r"^sha256:[a-f0-9]{64}$")
 
 
 def canonical_json(value: Any) -> str:
-    """Return the stable representation used for hashes and deterministic sorting."""
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    """Return RFC 8785 canonical JSON for governed identity and digests."""
+    return rfc8785.dumps(value).decode("utf-8")
 
 
 def content_digest(value: Any) -> str:
@@ -106,6 +114,23 @@ def _require_contract(document: Any, name: str, field_name: str) -> Mapping[str,
     if document.get("contract_name") != name or document.get("contract_version") != 1:
         raise ValueError(f"bundle field {field_name} must use {name} contract version 1")
     return document
+
+
+def _validate_self_digest(
+    document: Mapping[str, Any],
+    *,
+    digest_field: str,
+    field_name: str,
+) -> None:
+    if document.get("digest_algorithm") != "sha256-rfc8785-excluding-self-digest-v1":
+        raise ValueError(f"{field_name} digest algorithm is invalid")
+    claimed = document.get(digest_field)
+    if not isinstance(claimed, str) or not _DIGEST_PATTERN.fullmatch(claimed):
+        raise ValueError(f"{field_name} self digest is invalid")
+    body = deepcopy(dict(document))
+    body.pop(digest_field, None)
+    if content_digest(body) != claimed:
+        raise ValueError(f"{field_name} self digest mismatch")
 
 
 def _validate_coverage_semantics(coverage: Mapping[str, Any]) -> None:
@@ -162,9 +187,17 @@ def _validate_coverage_semantics(coverage: Mapping[str, Any]) -> None:
 
 def validate_bundle_headers(bundle: Mapping[str, Any]) -> None:
     """Validate owner-contract identity and frozen-snapshot cohesion."""
+    _require_contract(bundle, SCHEMA_SNAPSHOT_BUNDLE, "snapshot_bundle")
     snapshot_id = bundle.get("snapshot_id")
-    if not isinstance(snapshot_id, str) or not snapshot_id or not bundle.get("snapshot_at"):
-        raise ValueError("bundle requires snapshot_id and snapshot-native snapshot_at")
+    snapshot_digest = bundle.get("snapshot_digest")
+    if (
+        not isinstance(snapshot_id, str)
+        or not snapshot_id
+        or not bundle.get("snapshot_at")
+        or not isinstance(snapshot_digest, str)
+        or not snapshot_digest
+    ):
+        raise ValueError("bundle requires snapshot identity, digest, and snapshot-native time")
     testament = _require_contract(
         bundle.get("governance_testament"),
         SCHEMA_TESTAMENT,
@@ -181,7 +214,17 @@ def validate_bundle_headers(bundle: Mapping[str, Any]) -> None:
         (testament, ("testament_id", "version", "title", "status")),
         (lineage, ("graph_id", "generated_at", "frozen_snapshot_id")),
         (coverage, ("receipt_id", "generated_at", "snapshot_id", "receipt_hash")),
-        (ideal_register, ("register_id", "generated_at", "frozen_snapshot_id")),
+        (
+            ideal_register,
+            (
+                "register_id",
+                "snapshot_id",
+                "snapshot_digest",
+                "generated_at",
+                "digest_algorithm",
+                "register_digest",
+            ),
+        ),
     ):
         for field_name in fields:
             _required_text(document, field_name)
@@ -190,18 +233,98 @@ def validate_bundle_headers(bundle: Mapping[str, Any]) -> None:
         list,
     ):
         raise ValueError("lineage graph nodes and edges must be lists")
-    if not isinstance(ideal_register.get("ideal_forms"), list):
-        raise ValueError("ideal-form register ideal_forms must be a list")
+    if not lineage["nodes"]:
+        raise ValueError("lineage graph nodes must be non-empty")
+    if not isinstance(ideal_register.get("ideal_forms"), list) or not ideal_register["ideal_forms"]:
+        raise ValueError("ideal-form register ideal_forms must be non-empty")
     if lineage.get("frozen_snapshot_id") != snapshot_id:
         raise ValueError("lineage graph frozen_snapshot_id does not match bundle")
     if coverage.get("snapshot_id") != snapshot_id:
         raise ValueError("coverage snapshot_id does not match bundle")
-    if ideal_register.get("frozen_snapshot_id") != snapshot_id:
-        raise ValueError("ideal-form register frozen_snapshot_id does not match bundle")
+    if ideal_register.get("snapshot_id") != snapshot_id:
+        raise ValueError("ideal-form register snapshot_id does not match bundle")
+    if ideal_register.get("snapshot_digest") != snapshot_digest:
+        raise ValueError("ideal-form register snapshot_digest does not match bundle")
+    _validate_self_digest(
+        ideal_register,
+        digest_field="register_digest",
+        field_name="ideal-form register",
+    )
     _validate_coverage_semantics(coverage)
-    self_images = bundle.get("self_images", [])
-    if not isinstance(self_images, (list, dict)):
-        raise ValueError("bundle field self_images must be a list or object")
+
+    source_envelopes = bundle.get("source_envelopes")
+    assertions = bundle.get("assertion_evidence")
+    if not isinstance(source_envelopes, list) or not source_envelopes:
+        raise ValueError("bundle source_envelopes must be non-empty")
+    if not isinstance(assertions, list) or not assertions:
+        raise ValueError("bundle assertion_evidence must be non-empty")
+    normalized_events = bundle.get("normalized_events")
+    if not isinstance(normalized_events, list) or not normalized_events:
+        raise ValueError("bundle normalized_events must be non-empty")
+    for event in normalized_events:
+        if (
+            not isinstance(event, Mapping)
+            or event.get("contract_name") != SCHEMA_NORMALIZED_EVENT
+            or event.get("snapshot_id") != snapshot_id
+            or event.get("snapshot_digest") != snapshot_digest
+        ):
+            raise ValueError("normalized event snapshot binding is invalid")
+    for source in source_envelopes:
+        custody = source.get("custody_snapshot") if isinstance(source, Mapping) else None
+        if not isinstance(custody, Mapping) or custody.get("snapshot_id") != snapshot_id:
+            raise ValueError("source envelope snapshot binding is invalid")
+
+    self_image_set = _require_contract(
+        bundle.get("node_self_image_set"),
+        SCHEMA_SELF_IMAGE_SET,
+        "node_self_image_set",
+    )
+    for field_name in (
+        "set_id",
+        "snapshot_id",
+        "snapshot_digest",
+        "registry_reference",
+        "registry_digest",
+        "digest_algorithm",
+        "set_digest",
+    ):
+        _required_text(self_image_set, field_name)
+    registered_node_ids = _required_list(self_image_set, "registered_node_ids")
+    self_images = _required_list(self_image_set, "self_images")
+    if not registered_node_ids or not self_images:
+        raise ValueError("node self-image set must be non-empty")
+    if self_image_set.get("snapshot_id") != snapshot_id:
+        raise ValueError("node self-image set snapshot_id does not match bundle")
+    if self_image_set.get("snapshot_digest") != snapshot_digest:
+        raise ValueError("node self-image set snapshot_digest does not match bundle")
+    _validate_self_digest(
+        self_image_set,
+        digest_field="set_digest",
+        field_name="node self-image set",
+    )
+    image_ids = [
+        _required_text(image, "node_id")
+        for image in self_images
+        if isinstance(image, Mapping)
+    ]
+    if len(image_ids) != len(self_images):
+        raise ValueError("node self-image set images must be objects")
+    exact_one = (
+        len(image_ids) == len(set(image_ids))
+        and sorted(image_ids) == sorted(str(value) for value in registered_node_ids)
+    )
+    counts = self_image_set.get("counts")
+    if not isinstance(counts, Mapping) or counts.get("registered") != len(
+        registered_node_ids,
+    ) or counts.get("exported") != len(self_images):
+        raise ValueError("node self-image set counts are inconsistent")
+    readiness = self_image_set.get("readiness")
+    if not isinstance(readiness, Mapping):
+        raise ValueError("node self-image set readiness is missing")
+    if not exact_one or readiness.get("exact_all") is not True:
+        raise ValueError("node self-image set exact_one is inconsistent")
+    if readiness.get("ready") is not True or readiness.get("status") != "ready":
+        raise ValueError("node self-image set is not ready")
 
 
 def _units(value: Any) -> list[Any]:
@@ -217,11 +340,14 @@ def bundle_children(bundle: Mapping[str, Any]) -> list[tuple[str, int, Any]]:
     lineage = bundle["lineage_graph"]
     ideal_register = bundle["ideal_form_register"]
     collections = (
+        ("source_envelope", _units(bundle.get("source_envelopes", []))),
+        ("normalized_event", _units(bundle.get("normalized_events", []))),
         ("node", _units(lineage.get("nodes", []))),
         ("edge", _units(lineage.get("edges", []))),
         ("directive", [bundle["governance_testament"]]),
+        ("assertion", _units(bundle.get("assertion_evidence", []))),
         ("ideal_form", _units(ideal_register.get("ideal_forms", []))),
-        ("self_image", _units(bundle.get("self_images", []))),
+        ("self_image", _units(bundle["node_self_image_set"].get("self_images", []))),
     )
     children: list[tuple[str, int, Any]] = []
     for kind, units in collections:
@@ -278,9 +404,12 @@ class QuarantineDiagnostic:
 def empty_state() -> dict[str, Any]:
     """Create the serializable state persisted in a resume cursor."""
     return {
+        "source_envelopes": [],
+        "normalized_events": [],
         "nodes": [],
         "edges": [],
         "directives": [],
+        "assertions": [],
         "ideal_forms": [],
         "self_images": [],
         "quarantine": [],
@@ -313,6 +442,120 @@ def _required_list(unit: Mapping[str, Any], field_name: str) -> list[Any]:
     if not isinstance(value, list):
         raise ValueError(f"invalid_{field_name}")
     return value
+
+
+def _normalize_source_envelope(unit: Mapping[str, Any]) -> dict[str, Any]:
+    envelope = deepcopy(dict(unit))
+    if schema_id(envelope) != SCHEMA_SOURCE_ENVELOPE or envelope.get("contract_version") != 1:
+        raise ValueError("invalid_source_envelope_contract")
+    for field_name in (
+        "source_id",
+        "source_family",
+        "source_instance",
+        "format_adapter",
+        "role",
+        "event_timestamp",
+        "ingestion_timestamp",
+        "authority_class",
+        "body_hash",
+        "private_custody_pointer",
+    ):
+        _required_text(envelope, field_name)
+    custody = envelope.get("custody_snapshot")
+    if not isinstance(custody, Mapping):
+        raise ValueError("invalid_custody_snapshot")
+    for field_name in ("snapshot_id", "captured_at", "snapshot_hash", "custody_pointer"):
+        _required_text(custody, field_name)
+    if custody.get("immutable") is not True:
+        raise ValueError("source_envelope_not_immutable")
+    native_identifiers = envelope.get("native_identifiers")
+    if not isinstance(native_identifiers, Mapping) or not native_identifiers:
+        raise ValueError("missing_native_identifiers")
+    return envelope
+
+
+def _normalize_event(unit: Mapping[str, Any]) -> dict[str, Any]:
+    event = deepcopy(dict(unit))
+    if schema_id(event) != SCHEMA_NORMALIZED_EVENT or event.get("contract_version") != 1:
+        raise ValueError("invalid_normalized_event_contract")
+    for field_name in (
+        "event_id",
+        "identity_algorithm",
+        "snapshot_id",
+        "snapshot_digest",
+        "raw_unit_id",
+        "source_family",
+        "source_instance",
+        "format_adapter",
+        "normalized_role",
+        "occurred_at",
+        "authority_class",
+        "source_envelope_reference",
+    ):
+        _required_text(event, field_name)
+    identity_basis = event.get("identity_basis")
+    if not isinstance(identity_basis, Mapping):
+        raise ValueError("invalid_event_identity_basis")
+    for field_name in (
+        "native_identity_namespace",
+        "native_role",
+        "content_hash",
+    ):
+        _required_text(identity_basis, field_name)
+    native_identifiers = identity_basis.get("native_identifiers")
+    if not isinstance(native_identifiers, Mapping) or not native_identifiers:
+        raise ValueError("missing_event_native_identifiers")
+    if event["identity_algorithm"] != (
+        "sha256-canonical-json-native-identity-role-content-v1"
+    ):
+        raise ValueError("invalid_event_identity_algorithm")
+    expected_event_id = "evt_" + content_digest(identity_basis).removeprefix("sha256:")
+    if event["event_id"] != expected_event_id:
+        raise ValueError("event_identity_mismatch")
+    if not _required_list(event, "evidence_references"):
+        raise ValueError("missing_event_evidence_references")
+    if event["authority_class"] == "operator_intent" and event["normalized_role"] != "operator":
+        raise ValueError("event_authority_role_mismatch")
+    return event
+
+
+def _normalize_assertion(unit: Mapping[str, Any]) -> dict[str, Any]:
+    assertion = deepcopy(dict(unit))
+    if schema_id(assertion) != SCHEMA_ASSERTION_EVIDENCE or assertion.get("contract_version") != 1:
+        raise ValueError("invalid_assertion_evidence_contract")
+    for field_name in (
+        "assertion_id",
+        "assertion_class",
+        "statement",
+        "verification_state",
+    ):
+        _required_text(assertion, field_name)
+    if assertion["verification_state"] != "verified":
+        raise ValueError("assertion_not_verified")
+    references = _required_list(assertion, "evidence_references")
+    if len(references) < 2:
+        raise ValueError("assertion_requires_multiple_evidence_references")
+    independence_groups: set[str] = set()
+    for reference in references:
+        if not isinstance(reference, Mapping):
+            raise ValueError("invalid_assertion_evidence_reference")
+        for field_name in (
+            "evidence_id",
+            "independence_group",
+            "evidence_type",
+            "reference",
+            "body_hash",
+        ):
+            _required_text(reference, field_name)
+        independence_groups.add(str(reference["independence_group"]))
+    if len(independence_groups) < 2:
+        raise ValueError("assertion_evidence_not_independent")
+    freshness = assertion.get("freshness")
+    if assertion["assertion_class"] == "current_state" and (
+        not isinstance(freshness, Mapping) or freshness.get("status") != "fresh"
+    ):
+        raise ValueError("current_state_assertion_not_fresh")
+    return assertion
 
 
 def _normalize_node(unit: Mapping[str, Any]) -> dict[str, Any]:
@@ -397,11 +640,32 @@ def _normalize_directive(unit: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("invalid_testament_layers")
     for field_name in ("instruments", "axioms", "ideal_form_references", "predicates", "citations"):
         _required_list(testament, field_name)
-    if testament["status"] == "ratified" and not isinstance(
-        testament.get("ratification"),
-        Mapping,
-    ):
-        raise ValueError("missing_ratification")
+    if testament["status"] == "ratified":
+        ratification = testament.get("ratification")
+        if not isinstance(ratification, Mapping):
+            raise ValueError("missing_ratification")
+        for field_name in (
+            "ratified_at",
+            "candidate_digest",
+            "controlling_formulation",
+            "assertion_evidence_reference",
+            "constitutional_record_reference",
+            "approver_reference",
+        ):
+            _required_text(ratification, field_name)
+        if not _DIGEST_PATTERN.fullmatch(str(ratification["candidate_digest"])):
+            raise ValueError("invalid_candidate_digest")
+        if not _required_list(ratification, "authority_events"):
+            raise ValueError("authority_events_missing")
+        if not _required_list(ratification, "source_lineage_references"):
+            raise ValueError("source_lineage_references_missing")
+        if not isinstance(ratification.get("constitutional_coverage"), Mapping):
+            raise ValueError("constitutional_coverage_missing")
+        candidate = deepcopy(testament)
+        candidate["status"] = "candidate"
+        candidate.pop("ratification", None)
+        if ratification["candidate_digest"] != content_digest(candidate):
+            raise ValueError("candidate_digest_mismatch")
     return {"directive_id": testament["testament_id"], "testament": testament}
 
 
@@ -416,33 +680,60 @@ def _normalize_ideal_form(unit: Mapping[str, Any]) -> dict[str, Any]:
         "receipt_target",
     ):
         _required_text(ideal, field_name)
+    if not _required_list(ideal, "source_envelope_references"):
+        raise ValueError("missing_source_envelope_references")
     if not _required_list(ideal, "lineage_references"):
         raise ValueError("missing_lineage_references")
+    if not _required_list(ideal, "assertion_evidence_references"):
+        raise ValueError("missing_assertion_evidence_references")
     predicates = _required_list(ideal, "predicates")
     if not predicates:
         raise ValueError("missing_predicates")
-    distance = ideal.get("distance_to_ideal")
-    if not isinstance(distance, Mapping):
-        raise ValueError("invalid_distance_to_ideal")
-    _required_text(distance, "classification")
-    verified = distance.get("verified_predicates")
-    total = distance.get("total_predicates")
-    if (
-        not isinstance(verified, int)
-        or isinstance(verified, bool)
-        or not isinstance(total, int)
-        or isinstance(total, bool)
-        or verified < 0
-        or total <= 0
-        or verified > total
-    ):
-        raise ValueError("invalid_distance_to_ideal")
+    verified = 0
+    blocked = False
     for predicate in predicates:
         if not isinstance(predicate, Mapping):
             raise ValueError("invalid_predicate")
-        for field_name in ("predicate_id", "statement", "status"):
+        for field_name in (
+            "predicate_id",
+            "statement",
+            "receipt_reference",
+            "result",
+        ):
             _required_text(predicate, field_name)
-        _required_list(predicate, "evidence_references")
+        if predicate["result"] not in {"pass", "fail", "blocked"}:
+            raise ValueError("invalid_predicate_result")
+        evidence_references = _required_list(predicate, "evidence_references")
+        if predicate["receipt_reference"] not in evidence_references:
+            raise ValueError("predicate_receipt_not_evidence_backed")
+        verified += predicate["result"] == "pass"
+        blocked = blocked or predicate["result"] == "blocked"
+    total = len(predicates)
+    computed_state = "blocked" if blocked else "verified" if verified == total else "partial"
+    computed_distance = {
+        "classification": computed_state,
+        "verified_predicates": verified,
+        "total_predicates": total,
+    }
+    declared_distance = ideal.get("distance_to_ideal")
+    if declared_distance is not None and canonical_json(declared_distance) != canonical_json(
+        computed_distance,
+    ):
+        raise ValueError("distance_to_ideal_not_receipt_derived")
+    declared_state = ideal.get("implementation_state")
+    if declared_state is not None and declared_state != computed_state:
+        raise ValueError("implementation_state_not_receipt_derived")
+    ideal["implementation_state"] = computed_state
+    ideal["distance_to_ideal"] = computed_distance
+    derivation = ideal.get("derivation")
+    if not isinstance(derivation, Mapping):
+        raise ValueError("missing_predicate_derivation")
+    if derivation.get("algorithm") != "predicate-receipt-status-v1":
+        raise ValueError("invalid_predicate_derivation")
+    receipt_references = _required_list(derivation, "receipt_references")
+    expected_receipts = sorted(str(predicate["receipt_reference"]) for predicate in predicates)
+    if sorted(str(reference) for reference in receipt_references) != expected_receipts:
+        raise ValueError("predicate_derivation_receipts_incomplete")
     _required_list(ideal, "residual_gaps")
     return {"ideal_form_id": ideal["ideal_form_id"], "ideal_form": ideal}
 
@@ -470,7 +761,7 @@ def _normalize_self_image(unit: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(image["digests"], Mapping):
         raise ValueError("invalid_digests")
     for field_name in ("observations", "active_ideal_forms", "evidence_references"):
-        if not isinstance(image[field_name], list):
+        if not isinstance(image[field_name], list) or not image[field_name]:
             raise ValueError(f"invalid_{field_name}")
     return image
 
@@ -481,7 +772,15 @@ def process_child(state: dict[str, Any], kind: str, source_index: int, unit: Any
         _diagnose(state, kind, source_index, unit, "unit_not_object")
         return
     try:
-        if kind == "node":
+        if kind == "source_envelope":
+            normalized = _normalize_source_envelope(unit)
+            key = "source_id"
+            destination = "source_envelopes"
+        elif kind == "normalized_event":
+            normalized = _normalize_event(unit)
+            key = "event_id"
+            destination = "normalized_events"
+        elif kind == "node":
             normalized = _normalize_node(unit)
             key = "node_id"
             destination = "nodes"
@@ -493,6 +792,10 @@ def process_child(state: dict[str, Any], kind: str, source_index: int, unit: Any
             normalized = _normalize_directive(unit)
             key = "directive_id"
             destination = "directives"
+        elif kind == "assertion":
+            normalized = _normalize_assertion(unit)
+            key = "assertion_id"
+            destination = "assertions"
         elif kind == "ideal_form":
             normalized = _normalize_ideal_form(unit)
             key = "ideal_form_id"
@@ -561,10 +864,55 @@ def _resolve_authority_node(
     return candidates[0]
 
 
-def finalize_state(state: dict[str, Any]) -> dict[str, Any]:
+def _assertion_resolves_source(
+    assertion: Mapping[str, Any],
+    source: Mapping[str, Any],
+) -> bool:
+    source_id = str(source["source_id"])
+    accepted_references = {source_id, f"source-envelope:{source_id}"}
+    for evidence in assertion.get("evidence_references", []):
+        if not isinstance(evidence, Mapping):
+            continue
+        if (
+            evidence.get("evidence_type") == "immutable_source_event"
+            and evidence.get("reference") in accepted_references
+            and evidence.get("body_hash") == source.get("body_hash")
+        ):
+            return True
+    return False
+
+
+def finalize_state(
+    state: dict[str, Any],
+    *,
+    source_ready: bool,
+) -> dict[str, Any]:
     """Enforce endpoints, controlling operator authority, and explicit adoption."""
     finalized = deepcopy(state)
-    nodes = {node["node_id"]: node for node in finalized["nodes"]}
+    source_envelopes = {
+        source["source_id"]: source for source in finalized["source_envelopes"]
+    }
+    valid_nodes: list[dict[str, Any]] = []
+    for index, node in enumerate(finalized["nodes"]):
+        source = source_envelopes.get(node["source_envelope_id"])
+        if source is None:
+            _diagnose(finalized, "node", index, node, "source_envelope_unresolved")
+            continue
+        if source["body_hash"] != node["content_hash"]:
+            _diagnose(finalized, "node", index, node, "source_envelope_hash_mismatch")
+            continue
+        if source["event_timestamp"] != node["occurred_at"]:
+            _diagnose(finalized, "node", index, node, "source_envelope_timestamp_mismatch")
+            continue
+        if node["lane"] == "operator_intent" and source["authority_class"] != "operator_intent":
+            _diagnose(finalized, "node", index, node, "source_envelope_authority_mismatch")
+            continue
+        if node["lane"] == "artifact" and source["authority_class"] == "operator_intent":
+            _diagnose(finalized, "node", index, node, "source_envelope_authority_mismatch")
+            continue
+        valid_nodes.append(node)
+    finalized["nodes"] = valid_nodes
+    nodes = {node["node_id"]: node for node in valid_nodes}
 
     valid_edges: list[dict[str, Any]] = []
     for index, edge in enumerate(finalized["edges"]):
@@ -574,6 +922,10 @@ def finalize_state(state: dict[str, Any]) -> dict[str, Any]:
         valid_edges.append(edge)
     finalized["edges"] = valid_edges
     adopted = _adopted_artifacts(finalized)
+    assertions = {assertion["assertion_id"]: assertion for assertion in finalized["assertions"]}
+    normalized_events = {
+        event["event_id"]: event for event in finalized["normalized_events"]
+    }
 
     active_directives: list[dict[str, Any]] = []
     for index, directive in enumerate(finalized["directives"]):
@@ -581,20 +933,122 @@ def finalize_state(state: dict[str, Any]) -> dict[str, Any]:
         if testament["status"] != "ratified":
             _diagnose(finalized, "directive", index, testament, "testament_not_ratified")
             continue
+        if not source_ready:
+            _diagnose(finalized, "directive", index, testament, "source_coverage_not_ready")
+            continue
         ratification = testament.get("ratification")
-        reference = (
-            ratification.get("authority_event_reference")
-            if isinstance(ratification, Mapping)
-            else None
-        )
+        if not isinstance(ratification, Mapping):
+            _diagnose(finalized, "directive", index, testament, "missing_ratification")
+            continue
+        constitutional_coverage = ratification.get("constitutional_coverage")
+        if (
+            not isinstance(constitutional_coverage, Mapping)
+            or constitutional_coverage.get("exact_all") is not True
+            or constitutional_coverage.get("ready") is not True
+            or constitutional_coverage.get("blocked_scopes")
+            or constitutional_coverage.get("missing_requirements")
+        ):
+            _diagnose(
+                finalized,
+                "directive",
+                index,
+                testament,
+                "constitutional_coverage_not_ready",
+            )
+            continue
+        authority_events = ratification.get("authority_events")
+        if not isinstance(authority_events, list) or not authority_events:
+            _diagnose(finalized, "directive", index, testament, "authority_events_missing")
+            continue
+        authority_nodes: list[dict[str, Any]] = []
+        authority_valid = True
+        for authority_event in authority_events:
+            if not isinstance(authority_event, Mapping):
+                authority_valid = False
+                break
+            normalized = normalized_events.get(str(authority_event.get("event_id", "")))
+            source_id = authority_event.get("source_envelope_reference")
+            source = source_envelopes.get(str(source_id))
+            matching_nodes = [
+                node
+                for node in nodes.values()
+                if node["source_envelope_id"] == source_id
+                and node["lane"] == "operator_intent"
+            ]
+            if (
+                normalized is None
+                or source is None
+                or len(matching_nodes) != 1
+                or authority_event.get("role") != "operator"
+                or authority_event.get("authority_class") != "operator_intent"
+                or authority_event.get("content_hash") != source.get("body_hash")
+                or normalized.get("source_envelope_reference") != source_id
+                or normalized.get("authority_class") != "operator_intent"
+                or normalized.get("normalized_role") != "operator"
+                or normalized.get("identity_basis", {}).get("content_hash")
+                != source.get("body_hash")
+            ):
+                authority_valid = False
+                break
+            authority_nodes.append(matching_nodes[0])
+        if not authority_valid:
+            _diagnose(finalized, "directive", index, testament, "authority_event_unresolved")
+            continue
+        reference = ratification.get("authority_event_reference")
         controlling = (
-            _resolve_authority_node(nodes, str(reference)) if isinstance(reference, str) else None
+            _resolve_authority_node(nodes, str(reference))
+            if isinstance(reference, str)
+            else max(authority_nodes, key=lambda node: (node["occurred_at"], node["node_id"]))
         )
         if controlling is None:
             _diagnose(finalized, "directive", index, testament, "authority_reference_unresolved")
             continue
         if controlling["lane"] != "operator_intent":
             _diagnose(finalized, "directive", index, testament, "non_operator_controlling_node")
+            continue
+        source = source_envelopes.get(controlling["source_envelope_id"])
+        if source is None:
+            _diagnose(finalized, "directive", index, testament, "authority_source_unresolved")
+            continue
+        citation_ids = testament.get("citations", [])
+        resolved_assertions = [
+            assertions[citation_id]
+            for citation_id in citation_ids
+            if citation_id in assertions
+        ]
+        assertion_reference = ratification.get("assertion_evidence_reference")
+        operator_assertions = [
+            assertion
+            for assertion in resolved_assertions
+            if assertion["assertion_id"] == assertion_reference
+            and assertion["assertion_class"] == "operator_directive"
+            and _assertion_resolves_source(assertion, source)
+        ]
+        constitutional_record = ratification.get("constitutional_record_reference")
+        constitutional_assertion_backed = any(
+            evidence.get("evidence_type") == "ratified_constitutional_record"
+            and evidence.get("reference") == constitutional_record
+            for assertion in operator_assertions
+            for evidence in assertion.get("evidence_references", [])
+            if isinstance(evidence, Mapping)
+        )
+        if len(resolved_assertions) != len(citation_ids) or not operator_assertions:
+            _diagnose(
+                finalized,
+                "directive",
+                index,
+                testament,
+                "operator_directive_assertion_unresolved",
+            )
+            continue
+        if not constitutional_assertion_backed:
+            _diagnose(
+                finalized,
+                "directive",
+                index,
+                testament,
+                "constitutional_assertion_unresolved",
+            )
             continue
         active_directives.append({**directive, "controlling_node_id": controlling["node_id"]})
     finalized["directives"] = active_directives
@@ -607,13 +1061,72 @@ def finalize_state(state: dict[str, Any]) -> dict[str, Any]:
     active_ideals: list[dict[str, Any]] = []
     for index, ideal in enumerate(finalized["ideal_forms"]):
         ideal_id = ideal["ideal_form_id"]
+        ideal_document = ideal["ideal_form"]
         controlling_node_id = controlling_by_ideal.get(ideal_id)
         if controlling_node_id is None:
             _diagnose(finalized, "ideal_form", index, ideal, "ideal_not_ratified")
             continue
+        if any(
+            source_id not in source_envelopes
+            for source_id in ideal_document["source_envelope_references"]
+        ):
+            _diagnose(finalized, "ideal_form", index, ideal, "ideal_source_unresolved")
+            continue
+        if any(
+            assertion_id not in assertions
+            for assertion_id in ideal_document["assertion_evidence_references"]
+        ):
+            _diagnose(finalized, "ideal_form", index, ideal, "ideal_assertion_unresolved")
+            continue
         active_ideals.append({**ideal, "controlling_node_id": controlling_node_id})
     active_ideals.sort(key=lambda item: item["ideal_form_id"])
     finalized["ideal_forms"] = active_ideals
+    ideals_by_id = {
+        wrapper["ideal_form_id"]: wrapper["ideal_form"] for wrapper in active_ideals
+    }
+    valid_self_images: list[dict[str, Any]] = []
+    for index, image in enumerate(finalized["self_images"]):
+        image_valid = True
+        for active_form in image["active_ideal_forms"]:
+            if not isinstance(active_form, Mapping):
+                image_valid = False
+                break
+            ideal = ideals_by_id.get(str(active_form.get("form_id", "")))
+            if ideal is None:
+                image_valid = False
+                break
+            predicates = ideal["predicates"]
+            expected_predicates = sorted(str(item["predicate_id"]) for item in predicates)
+            expected_receipts = {
+                str(item["receipt_reference"]) for item in predicates
+            }
+            expected_distance = (
+                len(predicates)
+                - sum(item["result"] == "pass" for item in predicates)
+            ) / len(predicates)
+            evidence_references = active_form.get("evidence_references")
+            if (
+                active_form.get("implementation_state") != ideal["implementation_state"]
+                or active_form.get("distance_to_ideal") != expected_distance
+                or sorted(str(value) for value in active_form.get("predicate_references", []))
+                != expected_predicates
+                or not isinstance(evidence_references, list)
+                or not expected_receipts.issubset(
+                    {str(value) for value in evidence_references},
+                )
+            ):
+                image_valid = False
+                break
+        if not image_valid:
+            _diagnose(
+                finalized,
+                "self_image",
+                index,
+                image,
+                "self_image_ideal_state_not_receipt_derived",
+            )
+        valid_self_images.append(image)
+    finalized["self_images"] = valid_self_images
     finalized["adopted_artifact_node_ids"] = sorted(adopted)
     return finalized
 

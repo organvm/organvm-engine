@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 
 def cmd_testament_status(args: argparse.Namespace) -> int:
@@ -533,3 +534,113 @@ def _resolve_base_dir(args: argparse.Namespace) -> Path | None:
     """Resolve the base directory for the testament catalog."""
     base = getattr(args, "base_dir", None)
     return Path(base) if base else None
+
+
+def _load_bounded_json(
+    path: str,
+    max_input_bytes: int,
+    max_artifact_bytes: int,
+) -> dict:
+    from organvm_engine.corpus.governance_bundle import load_materialized_snapshot_bundle
+
+    return load_materialized_snapshot_bundle(
+        Path(path),
+        max_input_bytes=max_input_bytes,
+        max_artifact_bytes=max_artifact_bytes,
+    )
+
+
+def cmd_testament_candidate(args: argparse.Namespace) -> int:
+    """Compile the bounded, non-ratified first-pass governance testament."""
+    from organvm_engine.testament.governance_compiler import compile_candidate_testament
+
+    bundle = _load_bounded_json(
+        args.snapshot_bundle,
+        args.max_input_bytes,
+        args.max_artifact_bytes,
+    )
+    if args.write:
+        result = compile_candidate_testament(
+            bundle,
+            output_dir=Path(args.output_dir),
+            max_units=args.max_units,
+        )
+        print(json.dumps(result.receipt, indent=2, sort_keys=True))
+        return 0
+    with TemporaryDirectory(prefix="organvm-candidate-testament-") as temporary:
+        result = compile_candidate_testament(
+            bundle,
+            output_dir=Path(temporary),
+            max_units=args.max_units,
+        )
+        print(json.dumps({**result.receipt, "dry_run": True}, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_testament_iceberg_atlas(args: argparse.Namespace) -> int:
+    """Compile one bounded/resumable final Iceberg Atlas pass."""
+    from organvm_engine.events.spine import EventSpine
+    from organvm_engine.testament.iceberg_atlas import (
+        ReceiptIdentity,
+        compile_iceberg_atlas,
+    )
+
+    bundle = _load_bounded_json(
+        args.snapshot_bundle,
+        args.max_input_bytes,
+        args.max_artifact_bytes,
+    )
+    identity = ReceiptIdentity(
+        actor=args.actor,
+        source_organ=args.source_organ,
+        source_repo=args.source_repo,
+    )
+
+    def run(output_dir: Path, cursor_path: Path, spine_path: Path):
+        return compile_iceberg_atlas(
+            bundle,
+            output_dir=output_dir,
+            cursor_path=cursor_path,
+            event_spine=EventSpine(path=spine_path, max_chain_bytes=0),
+            receipt_identity=identity,
+            max_children=args.max_children,
+        )
+
+    if args.write:
+        output_dir = Path(args.output_dir)
+        result = run(
+            output_dir,
+            Path(args.cursor) if args.cursor else output_dir / ".governance-atlas-cursor.json",
+            Path(args.event_spine),
+        )
+    else:
+        with TemporaryDirectory(prefix="organvm-iceberg-atlas-") as temporary:
+            root = Path(temporary)
+            result = run(root / "output", root / "cursor.json", root / "events.jsonl")
+            print(
+                json.dumps(
+                    {
+                        "complete": result.complete,
+                        "processed_children": result.processed_children,
+                        "remaining_children": result.remaining_children,
+                        "receipt": result.receipt,
+                        "dry_run": True,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                ),
+            )
+            return 0
+    print(
+        json.dumps(
+            {
+                "complete": result.complete,
+                "processed_children": result.processed_children,
+                "remaining_children": result.remaining_children,
+                "receipt": result.receipt,
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+    )
+    return 0

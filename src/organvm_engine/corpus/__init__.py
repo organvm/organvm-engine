@@ -11,7 +11,20 @@ Pipeline: scan → extract → link → render
   4. Renderer produces corpus-graph.json + gap report
 """
 
+from organvm_engine.corpus.governance_lineage import (
+    REVIEWED_EDGE_TYPES,
+    ZOOM_LEVELS,
+    finalize_state,
+    process_child,
+)
 from organvm_engine.corpus.graph import CorpusGraph
 from organvm_engine.corpus.scanner import scan_corpus
 
-__all__ = ["scan_corpus", "CorpusGraph"]
+__all__ = [
+    "CorpusGraph",
+    "REVIEWED_EDGE_TYPES",
+    "ZOOM_LEVELS",
+    "finalize_state",
+    "process_child",
+    "scan_corpus",
+]

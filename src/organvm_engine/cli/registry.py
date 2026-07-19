@@ -84,7 +84,7 @@ def cmd_registry_list(args: argparse.Namespace) -> int:
     )
     results = sort_repo_results(results, field=args.sort_by, descending=args.desc)
 
-    if getattr(args, "json", False) or getattr(args, "format", "table") == "json":
+    if args.json:
         payload = [
             {
                 "name": repo["name"],

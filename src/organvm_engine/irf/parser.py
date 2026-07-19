@@ -44,9 +44,10 @@ class IRFItem:
 # Matches a ## section header (## or ###, not ####)
 _SECTION_RE = re.compile(r"^(#{2,3})\s+(.+)$")
 
-# Matches a pipe-delimited table row. Markdown permits either edge pipe to be
-# omitted, and hand-appended tail rows commonly use that compact form.
-_ROW_RE = re.compile(r"^\s*\|?.+?\|.*$")
+# Matches a pipe-delimited table row with at least 4 non-separator cells.
+# We accept rows like:  | cell | cell | cell | cell |
+# A trailing pipe is optional — hand-appended rows sometimes lack it.
+_ROW_RE = re.compile(r"^\|(.+?)\|?$")
 
 # A separator row contains only hyphens, pipes, colons, and spaces.
 _SEPARATOR_RE = re.compile(r"^[\|\-\:\s]+$")
@@ -63,7 +64,7 @@ _DONE_REF_RE = re.compile(r"^DONE-\d+[a-z]?$")
 
 def _cells(raw_row: str) -> list[str]:
     """Split a raw markdown table row into stripped cell strings."""
-    return [c.strip() for c in raw_row.strip().strip("|").split("|")]
+    return [c.strip() for c in raw_row.strip("|").split("|")]
 
 
 def _strip_cell_markup(value: str) -> str:
@@ -111,20 +112,15 @@ def _extract_domain(item_id: str) -> str:
 
 
 def _parse_active_row(cells: list[str], status: str, section: str) -> IRFItem | None:
-    """Parse an active item row.
+    """Parse a 6-column active item row.
 
-    Expected columns: ID | Priority | Action | Owner | Source | Blocker.
-    Hand-appended tail rows sometimes stop after the Action cell; owner,
-    source, and blocker are optional for parse/stat purposes.
+    Expected columns: ID | Priority | Action | Owner | Source | Blocker
     """
-    if len(cells) < 3:
+    if len(cells) < 6:
         return None
-    raw_item_id = cells[0]
-    raw_priority = cells[1]
-    action = cells[2]
-    owner = cells[3] if len(cells) > 3 else ""
-    source = cells[4] if len(cells) > 4 else ""
-    blocker = cells[5] if len(cells) > 5 else ""
+    raw_item_id, raw_priority, action, owner, source, blocker = (
+        cells[0], cells[1], cells[2], cells[3], cells[4], cells[5],
+    )
     item_id = _strip_cell_markup(raw_item_id)
     priority = _clean_priority(raw_priority)
     # ID must look like IRF-XXX-NNN[a] or DONE-NNN[a]
@@ -242,7 +238,7 @@ def parse_irf_diagnostics(path: Path) -> tuple[list[IRFItem], list[tuple[int, st
             continue
 
         # Skip separator rows
-        if _SEPARATOR_RE.fullmatch(line):
+        if _SEPARATOR_RE.match(line):
             continue
 
         cells = _cells(line)

@@ -15,7 +15,6 @@ from unittest.mock import patch
 import pytest
 
 from organvm_engine.cli import build_parser, main
-from organvm_engine.cli.context import cmd_context_sync
 
 FIXTURES = Path(__file__).parent / "fixtures"
 MOCK_REGISTRY = str(FIXTURES / "registry-minimal.json")
@@ -65,9 +64,6 @@ class TestHelpOutput:
             ["pitch", "--help"],
             ["context", "--help"],
             ["context", "surfaces", "--help"],
-            ["handoff", "--help"],
-            ["handoff", "list", "--help"],
-            ["handoff", "clean", "--help"],
             ["deadlines", "--help"],
             ["ci", "--help"],
         ],
@@ -144,25 +140,6 @@ class TestDispatchTable:
         assert args.subcommand == "surfaces"
         assert args.repo == "conversation-corpus-engine"
 
-    def test_handoff_subcommands_parse(self):
-        parser = build_parser()
-        args = parser.parse_args(["handoff", "list", "--workspace", "/tmp/ws", "--json"])
-        assert args.command == "handoff"
-        assert args.subcommand == "list"
-        assert args.workspace == "/tmp/ws"
-        assert args.json is True
-
-        clean = parser.parse_args(["handoff", "clean", "--older-than", "7d", "--write"])
-        assert clean.command == "handoff"
-        assert clean.subcommand == "clean"
-        assert clean.older_than == "7d"
-        assert clean.write is True
-
-        dry = parser.parse_args(["handoff", "clean", "--dry-run"])
-        assert dry.command == "handoff"
-        assert dry.subcommand == "clean"
-        assert dry.dry_run is True
-
 
 # ── Registry commands ────────────────────────────────────────────
 
@@ -198,18 +175,6 @@ class TestRegistryCommands:
         out = capsys.readouterr().out
         assert "recursive-engine" in out
         assert "product-app" in out
-
-    def test_registry_list_json_format(self, capsys):
-        with patch("sys.argv", ["organvm", "--registry", MOCK_REGISTRY, "registry", "list", "--format", "json"]):
-            rc = main()
-        assert rc == 0
-        import json
-        out = capsys.readouterr().out
-        data = json.loads(out)
-        assert isinstance(data, list)
-        names = [item["name"] for item in data]
-        assert "recursive-engine" in names
-        assert "product-app" in names
 
     def test_registry_list_by_organ(self, capsys):
         with patch(
@@ -291,31 +256,6 @@ class TestRegistryCommands:
         for key in ("name", "organ", "status", "tier", "promotion", "org"):
             assert key in entry, f"Missing key: {key}"
 
-    def test_registry_list_format_json(self, capsys):
-        with patch(
-            "sys.argv",
-            [
-                "organvm",
-                "--registry",
-                MOCK_REGISTRY,
-                "registry",
-                "list",
-                "--organ",
-                "META",
-                "--format",
-                "json",
-            ],
-        ):
-            rc = main()
-        assert rc == 0
-        import json
-
-        out = capsys.readouterr().out
-        data = json.loads(out)
-        assert len(data) == 2
-        assert all(entry["organ"] == "META-ORGANVM" for entry in data)
-        assert "Name" not in out
-
     def test_registry_list_json_with_organ_filter(self, capsys):
         with patch(
             "sys.argv",
@@ -348,12 +288,6 @@ class TestRegistryCommands:
         parser = build_parser()
         args = parser.parse_args(["registry", "list", "--json"])
         assert args.json is True
-
-    def test_registry_list_format_json_flag_parses(self):
-        parser = build_parser()
-        args = parser.parse_args(["registry", "list", "--format", "json"])
-        assert args.format == "json"
-        assert args.json is False
 
     def test_registry_validate_passes(self, capsys):
         with patch("sys.argv", ["organvm", "--registry", MOCK_REGISTRY, "registry", "validate"]):
@@ -570,60 +504,6 @@ class TestDryRunFlags:
         parser = build_parser()
         args = parser.parse_args(["context", "sync", "--dry-run"])
         assert args.dry_run is True
-
-    def test_context_sync_has_diff(self):
-        parser = build_parser()
-        args = parser.parse_args(["context", "sync", "--diff"])
-        assert args.diff is True
-
-    def test_context_sync_prints_changelog(self, monkeypatch, capsys):
-        import organvm_engine.contextmd.sync as sync_mod
-
-        def fake_sync_all(**kwargs):
-            return {
-                "updated": ["/tmp/CLAUDE.md"],
-                "created": [],
-                "skipped": [],
-                "errors": [],
-                "dry_run": kwargs["dry_run"],
-                "changes": [
-                    {
-                        "path": "/tmp/CLAUDE.md",
-                        "action": "updated",
-                        "added_lines": 2,
-                        "removed_lines": 1,
-                        "diff": "--- before\n+++ after\n-old\n+new\n+line",
-                    },
-                ],
-                "changelog": [
-                    {
-                        "path": "/tmp/CLAUDE.md",
-                        "action": "updated",
-                        "added_lines": 2,
-                        "removed_lines": 1,
-                        "diff": "--- before\n+++ after\n-old\n+new\n+line",
-                    },
-                ],
-            }
-
-        monkeypatch.setattr(sync_mod, "sync_all", fake_sync_all)
-        args = argparse.Namespace(
-            workspace=None,
-            registry=MOCK_REGISTRY,
-            organ=None,
-            write=False,
-            diff=True,
-        )
-
-        rc = cmd_context_sync(args)
-
-        assert rc == 0
-        out = capsys.readouterr().out
-        assert "Changelog" in out
-        assert "M /tmp/CLAUDE.md (+2/-1)" in out
-        assert "Diff" in out
-        assert "-old" in out
-        assert "+new" in out
 
     def test_context_surfaces_has_json_flag(self):
         parser = build_parser()

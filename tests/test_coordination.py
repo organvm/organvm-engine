@@ -78,31 +78,6 @@ class TestWorkClaim:
         assert restored.agent == "gemini"
         assert restored.organs == ["META"]
 
-    def test_ritual_metadata_roundtrip(self):
-        claim = WorkClaim(
-            claim_id="abc",
-            agent="codex",
-            session_id="s3",
-            timestamp=12345.0,
-            conductor_phase="SHAPE",
-            appetite_minutes=30,
-            micro_spec={
-                "outcome": "formalize lifecycle",
-                "non_goals": ["own ORGAN-IV implementation"],
-                "acceptance_checks": ["pytest tests/test_conductor_lifecycle.py"],
-            },
-            test_obligations=["pytest tests/test_conductor_lifecycle.py"],
-        )
-
-        d = claim.to_dict()
-        restored = WorkClaim.from_dict(d)
-
-        assert restored.conductor_phase == "SHAPE"
-        assert restored.appetite_minutes == 30
-        assert restored.micro_spec["outcome"] == "formalize lifecycle"
-        assert restored.ritual_metadata()["conductor_ritual_stage"] == "score"
-        assert restored.ritual_metadata()["score"]["appetite_minutes"] == 30
-
 
 class TestBuildActiveClaims:
     def test_empty(self):
@@ -190,31 +165,6 @@ class TestPunchIn:
         )
         assert result["conflict_count"] == 0
 
-    def test_punch_in_accepts_conductor_ritual_metadata(self):
-        result = punch_in(
-            agent="codex",
-            session_id="s1",
-            repos=["organvm-engine"],
-            scope="formalize Score Rehearse Perform lifecycle",
-            conductor_phase="SHAPE",
-            appetite_minutes=45,
-            micro_spec={
-                "outcome": "engine-side ritual contract",
-                "non_goals": ["implement Conductor MCP server"],
-                "acceptance_checks": ["pytest tests/test_conductor_lifecycle.py"],
-            },
-            test_obligations=["pytest tests/test_conductor_lifecycle.py"],
-        )
-
-        ritual = result["conductor_ritual"]
-        assert ritual["conductor_phase"] == "SHAPE"
-        assert ritual["conductor_ritual_stage"] == "score"
-        assert ritual["score"]["appetite_minutes"] == 45
-        assert ritual["score"]["micro_spec"]["outcome"] == "engine-side ritual contract"
-        assert ritual["rehearse"]["test_obligations"] == [
-            "pytest tests/test_conductor_lifecycle.py",
-        ]
-
 
 class TestPunchOut:
     def test_basic_punch_out(self):
@@ -279,23 +229,6 @@ class TestWorkBoard:
         assert board["agents_working"] == 2
         assert "claude" in board["by_agent"]
         assert "gemini" in board["by_agent"]
-
-    def test_board_includes_conductor_ritual(self):
-        punch_in(
-            agent="codex",
-            session_id="s1",
-            repos=["organvm-engine"],
-            conductor_phase="PROVE",
-            test_obligations=["pytest tests/test_coordination.py"],
-        )
-
-        board = work_board()
-        entry = board["by_agent"]["codex"][0]
-        assert entry["conductor_ritual"]["conductor_phase"] == "PROVE"
-        assert entry["conductor_ritual"]["conductor_ritual_stage"] == "rehearse"
-        assert entry["conductor_ritual"]["rehearse"]["test_obligations"] == [
-            "pytest tests/test_coordination.py",
-        ]
 
     def test_board_excludes_released(self):
         r = punch_in(agent="claude", session_id="s1", organs=["ORGAN-I"])

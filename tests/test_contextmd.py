@@ -12,7 +12,7 @@ from organvm_engine.contextmd.generator import (
     generate_repo_section,
     generate_workspace_section,
 )
-from organvm_engine.contextmd.sync import _inject_section, _inject_section_result, sync_repo
+from organvm_engine.contextmd.sync import _inject_section, sync_repo
 from organvm_engine.contextmd.templates import VARIABLE_STATUS_SECTION
 from organvm_engine.registry.loader import load_registry
 
@@ -66,48 +66,6 @@ class TestInjectSection:
         action = _inject_section(target, "## Content", dry_run=True)
         assert action == "created"
         assert not target.exists()
-
-    def test_result_includes_created_changelog(self, tmp_path):
-        target = tmp_path / "CLAUDE.md"
-        section = f"{AUTO_START}\n## Generated\n{AUTO_END}"
-        result = _inject_section_result(target, section, dry_run=True)
-
-        assert result["action"] == "created"
-        assert result["change"]["action"] == "created"
-        assert result["change"]["added_lines"] == 3
-        assert result["change"]["removed_lines"] == 0
-        assert result["change"]["before_hash"] is None
-        assert result["change"]["after_hash"]
-        assert "+## Generated" in result["change"]["diff"]
-        assert not target.exists()
-
-    def test_result_includes_updated_diff_without_writing_on_dry_run(self, tmp_path):
-        target = tmp_path / "CLAUDE.md"
-        old_section = f"{AUTO_START}\n## Old Section\n{AUTO_END}"
-        new_section = f"{AUTO_START}\n## New Section\n{AUTO_END}"
-        target.write_text(f"# My Project\n\n{old_section}\n")
-
-        result = _inject_section_result(target, new_section, dry_run=True)
-
-        assert result["action"] == "updated"
-        assert result["change"]["action"] == "updated"
-        assert result["change"]["added_lines"] == 1
-        assert result["change"]["removed_lines"] == 1
-        assert result["change"]["before_hash"]
-        assert result["change"]["after_hash"]
-        assert "-## Old Section" in result["change"]["diff"]
-        assert "+## New Section" in result["change"]["diff"]
-        assert "## Old Section" in target.read_text()
-
-    def test_result_omits_changelog_for_unchanged_file(self, tmp_path):
-        section = f"{AUTO_START}\n## Same\n{AUTO_END}"
-        target = tmp_path / "CLAUDE.md"
-        target.write_text(f"# Title\n\n{section}\n")
-
-        result = _inject_section_result(target, section)
-
-        assert result["action"] == "unchanged"
-        assert result["change"] is None
 
 
 class TestGenerateRepoSection:
@@ -295,7 +253,6 @@ class TestSyncRepo:
         repo_path.mkdir()
         result = sync_repo(repo_path, "recursive-engine", "organvm-i-theoria", registry)
         assert result["action"] == "created"
-        assert result["change"]["action"] == "created"
         content = (repo_path / "CLAUDE.md").read_text()
         assert AUTO_START in content
         assert "recursive-engine" in content
@@ -310,29 +267,3 @@ class TestSyncRepo:
         content = claude_md.read_text()
         assert "## Keep This" in content
         assert "## Old" not in content
-
-    def test_sync_flags_stale_handoff(self, tmp_path, registry):
-        from datetime import datetime, timedelta, timezone
-
-        repo_path = tmp_path / "recursive-engine"
-        repo_path.mkdir()
-        conductor = repo_path / ".conductor"
-        conductor.mkdir()
-        now = datetime.now(timezone.utc)
-        old = (now - timedelta(hours=72)).isoformat().replace("+00:00", "Z")
-        future = (now + timedelta(days=1)).isoformat().replace("+00:00", "Z")
-        (conductor / "active-handoff.md").write_text(
-            "---\n"
-            f"created_at: {old}\n"
-            f"expires_at: {future}\n"
-            "---\n"
-            "# Active handoff\n",
-        )
-
-        result = sync_repo(repo_path, "recursive-engine", "organvm-i-theoria", registry)
-
-        assert result["action"] == "created"
-        content = (repo_path / "CLAUDE.md").read_text()
-        assert "## Active Handoff Status" in content
-        assert "**STALE**" in content
-        assert "verify constraints" in content

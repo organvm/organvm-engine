@@ -18,8 +18,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from organvm_engine.coordination.lifecycle import build_conductor_ritual_metadata
-
 
 @dataclass
 class FileTouch:
@@ -56,21 +54,6 @@ class SessionDebrief:
     medium_todos: list[str] = field(default_factory=list)
     small_todos: list[str] = field(default_factory=list)
 
-    def conductor_ritual_metadata(self) -> dict[str, Any]:
-        """Return Score/Rehearse/Perform metadata for debrief export."""
-        test_commands = [cmd for cmd in self.bash_commands if _is_test_command(cmd)]
-        return build_conductor_ritual_metadata(
-            phase="DONE",
-            appetite_minutes=self.duration_minutes,
-            micro_spec={
-                "outcome": self.human_prompts[0] if self.human_prompts else "",
-                "acceptance_checks": test_commands,
-            },
-            rehearsal_commands=test_commands,
-            test_obligations=test_commands,
-            regression_detected=None,
-        )
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "session_id": self.session_id,
@@ -89,7 +72,6 @@ class SessionDebrief:
             "big_todos": self.big_todos,
             "medium_todos": self.medium_todos,
             "small_todos": self.small_todos,
-            "conductor_ritual": self.conductor_ritual_metadata(),
         }
 
 
@@ -385,33 +367,6 @@ def render_debrief(debrief: SessionDebrief) -> str:
         for f in debrief.files_edited:
             lines.append(f"- `{_short_path(f)}`")
         lines.append("")
-
-    ritual = debrief.conductor_ritual_metadata()
-    lifecycle = " -> ".join(ritual["conductor_lifecycle"])
-    ritual_sequence = " -> ".join(stage.title() for stage in ritual["conductor_ritual"])
-    appetite = ritual["score"]["appetite_minutes"]
-    appetite_value = f"{appetite} min" if appetite is not None else "unknown"
-    rehearsal_commands = ritual["rehearse"]["rehearsal_commands"]
-
-    lines.append("## Conductor Ritual")
-    lines.append("")
-    lines.append(f"**Lifecycle:** `{lifecycle}`")
-    lines.append(f"**Ritual:** `{ritual_sequence}`")
-    lines.append(f"**Phase:** `{ritual['conductor_phase']}`")
-    lines.append(f"**Stage:** `{ritual['conductor_ritual_stage']}`")
-    lines.append("")
-    lines.append(f"- **Score:** appetite `{appetite_value}`; micro-spec outcome captured.")
-    if rehearsal_commands:
-        lines.append(
-            f"- **Rehearse:** {len(rehearsal_commands)} verification command(s) recorded.",
-        )
-    else:
-        lines.append("- **Rehearse:** no verification commands recorded.")
-    lines.append(
-        "- **Perform:** regression status `not-recorded`; "
-        f"postmortem_required `{ritual['perform']['postmortem_required']}`.",
-    )
-    lines.append("")
 
     # Tiered to-dos
     lines.append("## To-Dos")

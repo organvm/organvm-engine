@@ -237,3 +237,11 @@ def resolve_workspace(
         return _coerce_path(env).resolve()
     default = _DEFAULT_WORKSPACE
     return default if default.is_dir() else None
+
+def context_dir(config: PathConfig | None = None) -> Path:
+    """Return the path to the context sync data directory."""
+    return corpus_dir(config) / "data" / "context"
+
+def context_changelog_path(config: PathConfig | None = None) -> Path:
+    """Return the path to context-sync-changelog.jsonl."""
+    return context_dir(config) / "context-sync-changelog.jsonl"

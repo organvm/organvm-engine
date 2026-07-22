@@ -97,7 +97,12 @@ from organvm_engine.cli.content import (
     cmd_content_new,
     cmd_content_status,
 )
-from organvm_engine.cli.context import cmd_context_surfaces, cmd_context_sync
+from organvm_engine.cli.context import (
+    cmd_context_diff,
+    cmd_context_rollback,
+    cmd_context_surfaces,
+    cmd_context_sync,
+)
 from organvm_engine.cli.corpus import (
     cmd_corpus_coverage,
     cmd_corpus_gaps,
@@ -1171,6 +1176,27 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Filter to specific organ",
     )
+    c_diff = ctx_sub.add_parser(
+        "diff",
+        help="Review recent context sync changes",
+    )
+    c_diff.add_argument(
+        "--last",
+        type=int,
+        default=1,
+        help="Number of recent syncs to show (default: 1)",
+    )
+
+    c_rollback = ctx_sub.add_parser(
+        "rollback",
+        help="Rollback a previous context sync",
+    )
+    c_rollback.add_argument(
+        "--to",
+        required=True,
+        help="Timestamp of the sync to rollback to",
+    )
+
     c_surfaces = ctx_sub.add_parser(
         "surfaces",
         help="Discover and validate conversation corpus surface exports",
@@ -3526,6 +3552,8 @@ def main() -> int:
         ("pitch", "sync"): cmd_pitch_sync,
         ("context", "sync"): cmd_context_sync,
         ("context", "surfaces"): cmd_context_surfaces,
+        ("context", "diff"): cmd_context_diff,
+        ("context", "rollback"): cmd_context_rollback,
         ("handoff", "list"): cmd_handoff_list,
         ("handoff", "clean"): cmd_handoff_clean,
         ("omega", "status"): cmd_omega_status,

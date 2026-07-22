@@ -1,0 +1,52 @@
+name: Release
+
+# Release automation: release-drafter (.github/workflows/release-drafter.yml)
+# maintains a rolling draft from merged PRs; this workflow publishes the actual
+# GitHub Release when a v* tag is pushed. Version is detected from repository
+# content (pyproject.toml) and validated against the tag before publishing, so a
+# mismatched tag fails fast rather than shipping an inconsistent release.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release and upload artifacts
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Detect package version from content
+        id: version
+        run: |
+          PKG_VERSION="$(python -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "package=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag v$TAG_VERSION does not match pyproject version $PKG_VERSION"
+            exit 1
+          fi
+          echo "Version content matches tag: $PKG_VERSION"
+
+      - name: Build distributions
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/*

@@ -397,6 +397,22 @@ KINSHIP_COMMUNITIES: list[dict] = [
         "tags": ["philosophy-of-tech", "computation", "ethics"],
         "organs": ["I"],
     },
+    {
+        "project": "society-for-philosophy-and-technology",
+        "platform": "community",
+        "relevance": "SPT — philosophy of technology society with conferences and SIGs",
+        "url": "https://www.spt.org",
+        "tags": ["philosophy-of-tech", "ethics", "academic"],
+        "organs": ["I"],
+    },
+    {
+        "project": "lesswrong",
+        "platform": "forum",
+        "relevance": "Rationality and epistemology forum for belief formation and AI-risk discourse",
+        "url": "https://www.lesswrong.com",
+        "tags": ["epistemology", "rationality", "ai-safety"],
+        "organs": ["I", "VI"],
+    },
     # ── ORGAN-II: Poiesis — creative coding, new media art, sound art ────
     {
         "project": "sfpc",
@@ -486,6 +502,30 @@ KINSHIP_COMMUNITIES: list[dict] = [
         "tags": ["sound-art", "algorithmic-music", "audio-synthesis"],
         "organs": ["II"],
     },
+    {
+        "project": "touchdesigner-forum",
+        "platform": "forum",
+        "relevance": "TouchDesigner forum — realtime visuals, interactive media, and installation practice",
+        "url": "https://forum.derivative.ca",
+        "tags": ["creative-coding", "new-media", "interactive-media"],
+        "organs": ["II"],
+    },
+    {
+        "project": "cycling74-forum",
+        "platform": "forum",
+        "relevance": "Cycling '74 forum — Max/MSP, Jitter, RNBO, and sound-art practice",
+        "url": "https://cycling74.com/forums",
+        "tags": ["sound-art", "interactive-media", "algorithmic-music"],
+        "organs": ["II"],
+    },
+    {
+        "project": "openframeworks-forum",
+        "platform": "forum",
+        "relevance": "openFrameworks forum — artist-programmer community around C++ creative coding",
+        "url": "https://forum.openframeworks.cc",
+        "tags": ["creative-coding", "new-media", "open-source"],
+        "organs": ["II"],
+    },
     # ── ORGAN-III: Ergon — indie hackers, solo SaaS, micro-ISV ──────────
     {
         "project": "indie-hackers",
@@ -543,6 +583,22 @@ KINSHIP_COMMUNITIES: list[dict] = [
         "tags": ["saas", "growth", "community"],
         "organs": ["III"],
     },
+    {
+        "project": "small-bets",
+        "platform": "community",
+        "relevance": "Small Bets — entrepreneurial community for small, iterative business experiments",
+        "url": "https://smallbets.com",
+        "tags": ["indie-hacker", "bootstrapping", "small-bets"],
+        "organs": ["III"],
+    },
+    {
+        "project": "yc-startup-school",
+        "platform": "community",
+        "relevance": "Startup School — free founder course, accountability, and co-founder matching",
+        "url": "https://www.startupschool.org",
+        "tags": ["startups", "founder-education", "accountability"],
+        "organs": ["III", "VI"],
+    },
     # ── ORGAN-IV: Taxis — DevOps, platform engineering, IaC ─────────────
     {
         "project": "cncf",
@@ -598,6 +654,30 @@ KINSHIP_COMMUNITIES: list[dict] = [
         "relevance": "OpenTofu — open-source infrastructure-as-code",
         "url": "https://opentofu.org",
         "tags": ["infrastructure-as-code", "iac", "open-source"],
+        "organs": ["IV"],
+    },
+    {
+        "project": "devopsdays",
+        "platform": "meetup",
+        "relevance": "DevOpsDays — local and regional DevOps community events",
+        "url": "https://devopsdays.org",
+        "tags": ["devops", "meetup", "community-of-practice"],
+        "organs": ["IV"],
+    },
+    {
+        "project": "kubernetes-slack",
+        "platform": "slack",
+        "relevance": "Kubernetes Slack — practitioner channels for cloud-native operations",
+        "url": "https://slack.k8s.io",
+        "tags": ["kubernetes", "cloud-native", "sre"],
+        "organs": ["IV"],
+    },
+    {
+        "project": "hashicorp-discuss",
+        "platform": "forum",
+        "relevance": "HashiCorp Discuss — Terraform, Vault, Consul, Nomad, and IaC operations forum",
+        "url": "https://discuss.hashicorp.com",
+        "tags": ["infrastructure-as-code", "terraform", "operations"],
         "organs": ["IV"],
     },
     # ── ORGAN-V: Logos — digital publishing, open journalism, POSSE ─────
@@ -657,6 +737,30 @@ KINSHIP_COMMUNITIES: list[dict] = [
         "tags": ["journalism", "data-viz", "storytelling"],
         "organs": ["V"],
     },
+    {
+        "project": "opennews",
+        "platform": "community",
+        "relevance": "OpenNews — journalism-tech network for open technology and community care",
+        "url": "https://www.opennews.org",
+        "tags": ["journalism", "open-news", "community"],
+        "organs": ["V"],
+    },
+    {
+        "project": "news-product-alliance-slack",
+        "platform": "slack",
+        "relevance": "News Product Alliance Slack — product thinking for public-interest journalism",
+        "url": "https://newsproduct.org",
+        "tags": ["journalism", "product", "community"],
+        "organs": ["V"],
+    },
+    {
+        "project": "wikimedia-l",
+        "platform": "mailing-list",
+        "relevance": "Wikimedia-l — public mailing list for Wikimedia community initiatives",
+        "url": "https://lists.wikimedia.org/postorius/lists/wikimedia-l.lists.wikimedia.org/",
+        "tags": ["open-publishing", "commons", "mailing-list"],
+        "organs": ["V", "META"],
+    },
     # ── ORGAN-VI: Koinonia — learning communities, book clubs, ed-tech ──
     {
         "project": "recurse-center",
@@ -712,6 +816,38 @@ KINSHIP_COMMUNITIES: list[dict] = [
         "relevance": "Open edX — open-source online learning platform",
         "url": "https://openedx.org",
         "tags": ["education", "open-source", "online-learning"],
+        "organs": ["VI"],
+    },
+    {
+        "project": "moodle-community",
+        "platform": "forum",
+        "relevance": "Moodle community forums — educator, admin, and developer learning support",
+        "url": "https://moodle.org/course/view.php?id=5",
+        "tags": ["edtech", "learning-community", "forum"],
+        "organs": ["VI"],
+    },
+    {
+        "project": "openedx-discuss",
+        "platform": "forum",
+        "relevance": "Open edX discussions — educators, learning researchers, developers, and operators",
+        "url": "https://discuss.openedx.org",
+        "tags": ["edtech", "open-source", "online-learning"],
+        "organs": ["VI"],
+    },
+    {
+        "project": "coderetreat",
+        "platform": "meetup",
+        "relevance": "Coderetreat — free community events for deliberate software practice",
+        "url": "https://www.coderetreat.org",
+        "tags": ["learning-community", "practice", "software-craft"],
+        "organs": ["VI"],
+    },
+    {
+        "project": "coderdojo",
+        "platform": "community",
+        "relevance": "CoderDojo / Code Club — volunteer-led coding clubs and learning resources",
+        "url": "https://coderdojo.com",
+        "tags": ["learning-community", "coding-education", "mentorship"],
         "organs": ["VI"],
     },
     # ── ORGAN-VII: Kerygma — POSSE distribution, social automation ──────
@@ -799,6 +935,25 @@ KINSHIP_COMMUNITIES: list[dict] = [
 ]
 
 
+_HUMAN_REVIEW_NOTE = (
+    "Candidate kinship mirror from LIMEN-070 research; requires human review "
+    "before writing to network-map.yaml."
+)
+
+_ORGAN_ALIASES = {
+    "ORGAN-I": "I",
+    "ORGAN-II": "II",
+    "ORGAN-III": "III",
+    "ORGAN-IV": "IV",
+    "ORGAN-V": "V",
+    "ORGAN-VI": "VI",
+    "ORGAN-VII": "VII",
+    "ORGAN-VIII": "META",
+    "META-ORGANVM": "META",
+    "META": "META",
+}
+
+
 def suggest_parallel_mirrors(
     repo_tags: list[str],
     repo_description: str = "",
@@ -850,6 +1005,46 @@ def suggest_parallel_mirrors(
     return suggestions
 
 
+def _normalize_organ_key(organ: str) -> str:
+    """Normalize ORGAN-I / I / META-ORGANVM spellings to kinship organ keys."""
+    normalized = organ.strip().upper().replace("_", "-").replace(" ", "-")
+    if not normalized:
+        return ""
+    if normalized in _ORGAN_ALIASES:
+        return _ORGAN_ALIASES[normalized]
+    if normalized.startswith("ORGAN-"):
+        return normalized.removeprefix("ORGAN-")
+    return normalized
+
+
+def _organ_tag(organ_key: str) -> str:
+    if organ_key == "META":
+        return "meta"
+    return f"organ-{organ_key.lower()}"
+
+
+def _unique_tags(tags: list[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for tag in tags:
+        if tag not in seen:
+            seen.add(tag)
+            unique.append(tag)
+    return unique
+
+
+def _community_entry(community: dict, extra_tags: list[str]) -> MirrorEntry:
+    return MirrorEntry(
+        project=community["project"],
+        platform=community.get("platform", "community"),
+        relevance=community["relevance"],
+        engagement=["presence", "dialogue"],
+        url=community.get("url"),
+        tags=_unique_tags(["suggested", "kinship", *extra_tags, *community.get("tags", [])]),
+        notes=community.get("notes", _HUMAN_REVIEW_NOTE),
+    )
+
+
 def suggest_kinship_mirrors(
     repo_tags: list[str],
     organ: str = "",
@@ -863,54 +1058,20 @@ def suggest_kinship_mirrors(
     skip = existing_projects or set()
     suggestions: list[MirrorEntry] = []
 
-    # Tag-based matching
     normalized_tags = {t.lower().replace("_", "-") for t in repo_tags}
+    organ_key = _normalize_organ_key(organ)
 
     for community in KINSHIP_COMMUNITIES:
         if community["project"] in skip:
             continue
-        comm_tags = set(community.get("tags", []))
+
+        extra_tags: list[str] = []
+        comm_tags = {t.lower().replace("_", "-") for t in community.get("tags", [])}
         if comm_tags & normalized_tags:
-            suggestions.append(MirrorEntry(
-                project=community["project"],
-                platform=community.get("platform", "community"),
-                relevance=community["relevance"],
-                engagement=["presence", "dialogue"],
-                url=community.get("url"),
-                tags=["suggested", "kinship"] + community.get("tags", []),
-            ))
+            extra_tags.append("tag-match")
+        if organ_key and organ_key in community.get("organs", []):
+            extra_tags.append(_organ_tag(organ_key))
+        if extra_tags:
+            suggestions.append(_community_entry(community, extra_tags))
 
-    # Organ-based suggestions (always relevant for certain organs)
-    organ_upper = organ.upper()
-    if organ_upper in ("ORGAN-I", "META") and "tools-for-thought" not in skip:
-        suggestions.append(MirrorEntry(
-            project="tools-for-thought",
-            platform="community",
-            relevance="Knowledge management alignment with ORGAN-I theory work",
-            engagement=["presence", "dialogue"],
-            tags=["suggested", "kinship", "knowledge-management"],
-        ))
-    if organ_upper == "ORGAN-II":
-        for comm in KINSHIP_COMMUNITIES:
-            if (
-                any(t in comm.get("tags", []) for t in ("creative-coding", "art-tech"))
-                and comm["project"] not in skip
-            ):
-                    suggestions.append(MirrorEntry(
-                        project=comm["project"],
-                        platform=comm.get("platform", "community"),
-                        relevance=comm["relevance"],
-                        engagement=["presence", "dialogue"],
-                        url=comm.get("url"),
-                        tags=["suggested", "kinship", "organ-ii"],
-                    ))
-
-    # Deduplicate by project
-    seen: set[str] = set()
-    unique: list[MirrorEntry] = []
-    for s in suggestions:
-        if s.project not in seen:
-            seen.add(s.project)
-            unique.append(s)
-
-    return unique
+    return suggestions

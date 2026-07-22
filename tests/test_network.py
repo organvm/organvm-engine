@@ -14,6 +14,7 @@ import yaml
 
 from organvm_engine.network import ENGAGEMENT_FORMS, MIRROR_LENSES, NETWORK_MAP_FILENAME
 from organvm_engine.network.discover import (
+    KINSHIP_COMMUNITIES,
     suggest_kinship_mirrors,
     suggest_parallel_mirrors,
 )
@@ -743,6 +744,28 @@ class TestDiscover:
         suggestions = suggest_kinship_mirrors([], organ="ORGAN-I")
         assert any(s.project == "tools-for-thought" for s in suggestions)
 
+    def test_suggest_kinship_all_issue_organs(self):
+        expected_projects = {
+            "ORGAN-I": "society-for-philosophy-and-technology",
+            "ORGAN-II": "touchdesigner-forum",
+            "ORGAN-III": "small-bets",
+            "ORGAN-IV": "devopsdays",
+            "ORGAN-V": "opennews",
+            "ORGAN-VI": "moodle-community",
+        }
+        for organ, project in expected_projects.items():
+            suggestions = suggest_kinship_mirrors([], organ=organ)
+            assert any(s.project == project for s in suggestions)
+
+    def test_suggest_kinship_meta_organvm_alias(self):
+        suggestions = suggest_kinship_mirrors([], organ="META-ORGANVM")
+        assert any(s.project == "wikimedia-l" for s in suggestions)
+
+    def test_suggest_kinship_marks_human_review_required(self):
+        suggestions = suggest_kinship_mirrors([], organ="ORGAN-IV")
+        assert suggestions
+        assert all(s.notes and "requires human review" in s.notes for s in suggestions)
+
     def test_suggest_kinship_excludes_existing(self):
         suggestions = suggest_kinship_mirrors(
             ["creative-coding"],
@@ -757,6 +780,10 @@ class TestDiscover:
         )
         projects = [s.project for s in suggestions]
         assert len(projects) == len(set(projects))
+
+    def test_kinship_communities_include_researched_platforms(self):
+        platforms = {c.get("platform", "community") for c in KINSHIP_COMMUNITIES}
+        assert {"discord", "forum", "mailing-list", "meetup"} <= platforms
 
 
 # ─── Synthesizer ────────────────────────────────────────────────────────

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- MCP tool layer (`organvm_engine.mcp`): pure, JSON-serializable wrappers
+  exposing the five core CLIs (registry, governance, seed, metrics, dispatch)
+  to the `organvm-mcp-server` without an MCP-SDK dependency. Includes a
+  `MCP_TOOLS` manifest plus `list_tools()` / `call_tool()` for generic
+  registration and dispatch.
+
 ## 0.1.0 (2026-02-17)
 
 - Initial release: 5 modules (registry, governance, seed, metrics, dispatch)

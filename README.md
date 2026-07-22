@@ -62,6 +62,7 @@ print(result.summary())
 | `metrics` | Compute and propagate system-wide metrics |
 | `dispatch` | Cross-organ event routing and cascade planning |
 | `contextmd` | Sync AI context files and discover exported conversation-corpus surfaces |
+| `mcp` | JSON-serializable tool wrappers exposing the 5 core CLIs to `organvm-mcp-server` |
 
 ## Part of the Eight-Organ System
 

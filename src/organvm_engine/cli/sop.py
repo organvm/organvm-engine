@@ -1,4 +1,4 @@
-"""CLI commands: organvm sop discover|audit|check|resolve|init."""
+"""CLI commands: organvm sop discover|audit|check|resolve|stale|init."""
 
 from __future__ import annotations
 
@@ -35,6 +35,7 @@ def cmd_sop_discover(args: argparse.Namespace) -> int:
                 "overrides": e.overrides,
                 "complements": e.complements,
                 "sop_name": e.sop_name,
+                "governs": e.governs,
             }
             for e in entries
         ]
@@ -135,6 +136,43 @@ def cmd_sop_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sop_stale(args: argparse.Namespace) -> int:
+    from organvm_engine.paths import resolve_workspace as _resolve_workspace
+    from organvm_engine.sop.discover import discover_repo_sops, discover_sops
+    from organvm_engine.sop.staleness import audit_sop_staleness
+
+    repo_root_arg = getattr(args, "repo_root", None)
+    require_governs = getattr(args, "require_governs", False)
+    include_unlinked = require_governs or not getattr(args, "linked_only", False)
+
+    if repo_root_arg:
+        repo_root = Path(repo_root_arg).expanduser()
+        entries = discover_repo_sops(repo_root)
+        result = audit_sop_staleness(
+            entries,
+            repo_root=repo_root,
+            include_unlinked=include_unlinked,
+        )
+    else:
+        workspace = _resolve_workspace(args)
+        organ = getattr(args, "organ", None)
+        entries = discover_sops(workspace=workspace, organ=organ)
+        result = audit_sop_staleness(
+            entries,
+            workspace=workspace,
+            include_unlinked=include_unlinked,
+        )
+
+    if getattr(args, "json", False):
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        _print_staleness_report(result)
+
+    if getattr(args, "strict", False) and result.has_failures(require_governs=require_governs):
+        return 1
+    return 0
+
+
 def cmd_sop_resolve(args: argparse.Namespace) -> int:
     from organvm_engine.organ_config import ORGANS
     from organvm_engine.paths import resolve_workspace as _resolve_workspace
@@ -176,6 +214,36 @@ def cmd_sop_resolve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_staleness_report(result) -> None:
+    print("SOP Staleness Report")
+    print(f"{'=' * 60}")
+
+    if result.stale:
+        print(f"\nSTALE ({len(result.stale)}):")
+        for issue in result.stale:
+            days = f"{issue.days_stale}d" if issue.days_stale is not None else "newer"
+            print(f"  {issue.sop_name:<35} {days:<8} {issue.code_path}")
+
+    if result.missing:
+        print(f"\nMISSING GOVERNED CODE ({len(result.missing)}):")
+        for issue in result.missing:
+            print(f"  {issue.sop_name:<35} {issue.pattern}")
+
+    if result.unlinked:
+        print(f"\nUNLINKED SOPs ({len(result.unlinked)}):")
+        for issue in result.unlinked:
+            print(f"  {issue.sop_name:<35} {issue.sop_path}")
+
+    if not result.stale and not result.missing:
+        print("\nAll linked SOP/code references are fresh.")
+
+    print(
+        f"\nSummary: {result.checked_sops} SOPs, {result.linked_sops} linked, "
+        f"{len(result.unlinked)} unlinked, {result.checked_refs} code refs checked, "
+        f"{len(result.stale)} stale, {len(result.missing)} missing",
+    )
+
+
 _SOP_INIT_TEMPLATE = """\
 ---
 sop: true
@@ -185,6 +253,7 @@ phase: any
 triggers: []
 complements: []
 overrides: null
+governs: []
 ---
 # {title}
 

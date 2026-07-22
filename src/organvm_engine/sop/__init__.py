@@ -1,1 +1,1 @@
-"""SOP discovery, inventory tracking, and four-tier resolution."""
+"""SOP discovery, inventory tracking, resolution, and staleness checks."""

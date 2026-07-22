@@ -54,6 +54,7 @@ class SOPEntry:
     overrides: str | None = None
     complements: list[str] = field(default_factory=list)
     sop_name: str | None = None  # from frontmatter 'name' or derived from filename
+    governs: list[str] = field(default_factory=list)
 
 
 def _parse_frontmatter(path: Path) -> dict:
@@ -90,6 +91,39 @@ def _derive_sop_name(filename: str) -> str:
     stem = Path(filename).stem
     # Strip SOP--, sop--, METADOC--, etc. prefixes
     return re.sub(r"^(SOP--|sop--|sop-|METADOC--|metadoc--|APPENDIX--|appendix--)", "", stem)
+
+
+def _normalize_string_list(value: object) -> list[str]:
+    """Normalize a frontmatter scalar/list/dict into a list of strings."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        item = value.strip()
+        return [item] if item else []
+    if isinstance(value, dict):
+        for key in ("path", "paths", "file", "files", "code", "items"):
+            if key in value:
+                return _normalize_string_list(value[key])
+        return []
+    if isinstance(value, (list, tuple, set)):
+        result: list[str] = []
+        for item in value:
+            result.extend(_normalize_string_list(item))
+        return result
+    return []
+
+
+def _extract_governs(fm: dict) -> list[str]:
+    """Extract governed code references from SOP frontmatter.
+
+    ``governs`` is the canonical key. The aliases keep older or hand-authored
+    frontmatter useful while the ecosystem converges on one spelling.
+    """
+    for key in ("governs", "governed_code", "code_refs", "source_files"):
+        values = _normalize_string_list(fm.get(key))
+        if values:
+            return values
+    return []
 
 
 def _infer_scope(path: Path, workspace: Path) -> str:
@@ -238,6 +272,25 @@ def discover_sops(
     return sorted(entries, key=lambda e: (e.org, e.repo, e.filename))
 
 
+def discover_repo_sops(
+    repo_root: Path | str,
+    org: str = "local",
+    repo: str | None = None,
+) -> list[SOPEntry]:
+    """Find SOP files inside a single repository checkout.
+
+    This is the flat-layout counterpart to ``discover_sops()``, which expects
+    the full ORGANVM workspace shape (``<workspace>/<org>/<repo>``). It scans
+    legacy SOP-pattern files and the repo-level ``.sops/`` directory.
+    """
+    root = Path(repo_root)
+    repo_name = repo or root.name
+    entries: list[SOPEntry] = []
+    _scan_repo(root, org, repo_name, root, entries)
+    _scan_sops_dir(root, org, repo_name, root / ".sops", entries)
+    return sorted(entries, key=lambda e: (e.org, e.repo, e.filename, str(e.path)))
+
+
 def _scan_repo(
     workspace: Path,
     org_name: str,
@@ -324,6 +377,7 @@ def _build_entry(
         overrides=fm.get("overrides"),
         complements=fm.get("complements") or [],
         sop_name=sop_name,
+        governs=_extract_governs(fm),
     )
 
 

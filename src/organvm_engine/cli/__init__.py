@@ -34,6 +34,7 @@ Usage:
     organvm pitch sync [--organ X] [--dry-run] [--tier X]
     organvm context sync [--dry-run] [--organ X]
     organvm context surfaces [--workspace <path>] [--repo <name>] [--json]
+    organvm sop audit [--stale] [--json]
     organvm handoff list [--workspace <path>] [--json]
     organvm handoff clean [--workspace <path>] [--older-than 7d] [--write]
     organvm prompts narrate [--agent claude|gemini|codex] [--project FILTER] [--output FILE] [--summary FILE] [--dry-run] [--gap-hours 24]
@@ -1924,7 +1925,26 @@ def build_parser() -> argparse.ArgumentParser:
     sop_discover = sop_sub.add_parser("discover", help="Find all SOP/METADOC files")
     sop_discover.add_argument("--json", action="store_true", help="Output JSON")
 
-    sop_sub.add_parser("audit", help="Compare discovered SOPs against METADOC inventory")
+    sop_audit = sop_sub.add_parser(
+        "audit",
+        help="Compare discovered SOPs against METADOC inventory",
+    )
+    sop_audit.add_argument("--json", action="store_true", help="Output JSON")
+    sop_audit.add_argument(
+        "--stale",
+        action="store_true",
+        help="Compare mapped SOP mtimes against governed code",
+    )
+    sop_audit.add_argument(
+        "--mapping",
+        default=None,
+        help="Path to a sop-governance.yaml mapping file",
+    )
+    sop_audit.add_argument(
+        "--include-fresh",
+        action="store_true",
+        help="Show fresh SOP-code mappings in stale audit output",
+    )
 
     sop_check = sop_sub.add_parser(
         "check",

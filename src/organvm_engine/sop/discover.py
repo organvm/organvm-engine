@@ -207,6 +207,16 @@ def discover_sops(
     """
     ws = Path(workspace) if workspace else workspace_root()
 
+    repo_identity = _repo_root_identity(ws)
+    if repo_identity is not None:
+        org_name, repo_name = repo_identity
+        if organ and not _matches_organ_filter(org_name, organ):
+            return []
+        entries: list[SOPEntry] = []
+        _scan_repo(ws, org_name, repo_name, ws, entries)
+        _scan_sops_dir(ws, org_name, repo_name, ws / ".sops", entries)
+        return sorted(entries, key=lambda e: (e.org, e.repo, e.filename))
+
     if organ:
         org_meta = ORGANS.get(organ.upper())
         if not org_meta:
@@ -236,6 +246,38 @@ def discover_sops(
             _scan_sops_dir(ws, org_name, repo_dir.name, repo_dir / ".sops", entries)
 
     return sorted(entries, key=lambda e: (e.org, e.repo, e.filename))
+
+
+def _repo_root_identity(path: Path) -> tuple[str, str] | None:
+    """Return ``(org, repo)`` when *path* itself is a repo root."""
+    if any((path / org_dir).is_dir() for org_dir in ALL_ORG_DIRS):
+        return None
+    if not (path / "seed.yaml").is_file() and not (path / ".sops").is_dir():
+        return None
+
+    org_name = path.parent.name
+    repo_name = path.name
+    seed_path = path / "seed.yaml"
+    if seed_path.is_file():
+        try:
+            data = yaml.safe_load(seed_path.read_text()) or {}
+        except (OSError, yaml.YAMLError):
+            data = {}
+        if isinstance(data, dict):
+            seed_org = data.get("org") or data.get("organ")
+            seed_repo = data.get("repo")
+            if isinstance(seed_org, str) and seed_org:
+                org_name = seed_org
+            if isinstance(seed_repo, str) and seed_repo:
+                repo_name = seed_repo
+    return org_name, repo_name
+
+
+def _matches_organ_filter(org_name: str, organ: str) -> bool:
+    org_meta = ORGANS.get(organ.upper())
+    if org_meta:
+        return org_meta["dir"] == org_name
+    return org_name == organ
 
 
 def _scan_repo(

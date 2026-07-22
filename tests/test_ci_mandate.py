@@ -47,6 +47,12 @@ class TestResolveRepoPath:
         result = _resolve_repo_path("my-org", "my-repo", "ORGAN-X", tmp_path, {})
         assert result == repo
 
+    def test_fallback_to_flat_workspace_repo(self, tmp_path):
+        repo = tmp_path / "my-repo"
+        repo.mkdir()
+        result = _resolve_repo_path("legacy-org", "my-repo", "ORGAN-X", tmp_path, {})
+        assert result == repo
+
     def test_not_found(self, tmp_path):
         result = _resolve_repo_path("no-org", "no-repo", "ORGAN-X", tmp_path, {})
         assert result is None

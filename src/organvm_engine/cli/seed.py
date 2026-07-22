@@ -77,7 +77,7 @@ def cmd_seed_discover(args: argparse.Namespace) -> int:
 
 def cmd_seed_validate(args: argparse.Namespace) -> int:
     from organvm_engine.seed.discover import discover_seeds
-    from organvm_engine.seed.reader import read_seed
+    from organvm_engine.seed.reader import get_consumes, get_produces, read_seed
 
     seeds = discover_seeds(args.workspace)
     errors = 0
@@ -91,7 +91,13 @@ def cmd_seed_validate(args: argparse.Namespace) -> int:
                 print(f"  FAIL {path.parent.name}: missing {', '.join(missing)}")
                 errors += 1
             else:
-                print(f"  PASS {seed.get('org')}/{seed.get('repo')}")
+                produces = get_produces(seed)
+                consumes = get_consumes(seed)
+                
+                if not produces and not consumes:
+                    print(f"  WARN {seed.get('org')}/{seed.get('repo')}: zero produces/consumes edges (LEX-IV Metabolism violation)")
+                else:
+                    print(f"  PASS {seed.get('org')}/{seed.get('repo')}")
         except Exception as e:
             print(f"  FAIL {path}: {e}")
             errors += 1

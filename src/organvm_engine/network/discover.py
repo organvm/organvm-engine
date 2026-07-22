@@ -297,8 +297,8 @@ PARALLEL_PROJECTS: dict[str, list[dict]] = {
 }
 
 # Kinship communities — philosophical alignment, not technology.
-# Organized by organ affinity (issues #65, #66). A community may align with
-# multiple organs; the primary organ tag is listed first.
+# Organized by organ affinity (issues #65, #66; R3 round #66 / LIMEN-070). A
+# community may align with multiple organs; the primary organ tag is listed first.
 KINSHIP_COMMUNITIES: list[dict] = [
     # ── Cross-organ / system-wide ────────────────────────────────────────
     {
@@ -338,6 +338,7 @@ KINSHIP_COMMUNITIES: list[dict] = [
         "project": "tools-for-thought",
         "platform": "community",
         "relevance": "Knowledge management, second brain, networked thought",
+        "url": "https://www.reddit.com/r/ToolsForThought/",
         "tags": ["knowledge-management", "pkm", "note-taking"],
         "organs": ["I"],
     },
@@ -795,6 +796,218 @@ KINSHIP_COMMUNITIES: list[dict] = [
         "url": "https://opensource.org",
         "tags": ["open-source", "licensing", "commons"],
         "organs": ["META"],
+    },
+    # ══ R3 research round (LIMEN-070, issue #66) ═════════════════════════════
+    # Third community-identification pass. Curated, verifiable communities that
+    # deepen per-organ kinship coverage and add cross-organ commons.
+    # ── Cross-organ / system-wide ────────────────────────────────────────
+    {
+        "project": "sustainoss",
+        "platform": "community",
+        "relevance": "Sustain — gathering for open source maintainers and sustainers",
+        "url": "https://sustainoss.org",
+        "tags": ["oss-sustainability", "maintainers", "commons"],
+        "organs": ["META", "III"],
+    },
+    {
+        "project": "permacomputing",
+        "platform": "community",
+        "relevance": "Permacomputing — sustainable, minimal, resilient computing practice",
+        "url": "https://permacomputing.net",
+        "tags": ["permacomputing", "sustainability", "minimal-computing"],
+        "organs": ["I", "IV", "META"],
+    },
+    {
+        "project": "solid-project",
+        "platform": "community",
+        "relevance": "Solid — decentralized data ownership for the web (Tim Berners-Lee)",
+        "url": "https://solidproject.org",
+        "tags": ["data-ownership", "decentralization", "open-web"],
+        "organs": ["V", "VII"],
+    },
+    {
+        "project": "digital-gardeners",
+        "platform": "community",
+        "relevance": "Digital gardens — public, evolving personal knowledge spaces",
+        "url": "https://github.com/MaggieAppleton/digital-gardeners",
+        "tags": ["digital-gardens", "pkm", "knowledge-sharing"],
+        "organs": ["I", "V"],
+    },
+    # ── ORGAN-I: Theoria ─────────────────────────────────────────────────
+    {
+        "project": "lesswrong",
+        "platform": "forum",
+        "relevance": "LessWrong — rationality, epistemology, and decision theory",
+        "url": "https://lesswrong.com",
+        "tags": ["rationality", "epistemology", "decision-theory"],
+        "organs": ["I"],
+    },
+    {
+        "project": "principia-cybernetica",
+        "platform": "wiki",
+        "relevance": "Principia Cybernetica — evolutionary-systemic philosophy collaborative",
+        "url": "http://pespmc1.vub.ac.be",
+        "tags": ["cybernetics", "systems-theory", "evolution"],
+        "organs": ["I"],
+    },
+    {
+        "project": "metagov",
+        "platform": "community",
+        "relevance": "Metagovernance Project — research on governance of online communities",
+        "url": "https://metagov.org",
+        "tags": ["governance", "online-communities", "research"],
+        "organs": ["I", "META"],
+    },
+    # ── ORGAN-II: Poiesis ────────────────────────────────────────────────
+    {
+        "project": "openprocessing",
+        "platform": "community",
+        "relevance": "OpenProcessing — community archive for creative-coding sketches",
+        "url": "https://openprocessing.org",
+        "tags": ["creative-coding", "generative-art", "sketch-sharing"],
+        "organs": ["II"],
+    },
+    {
+        "project": "hydra-community",
+        "platform": "community",
+        "relevance": "Hydra — live-coding networked visuals community",
+        "url": "https://hydra.ojack.xyz",
+        "tags": ["live-coding", "visuals", "generative-art"],
+        "organs": ["II"],
+    },
+    {
+        "project": "nime",
+        "platform": "community",
+        "relevance": "NIME — New Interfaces for Musical Expression research community",
+        "url": "https://nime.org",
+        "tags": ["sound-art", "musical-instruments", "research"],
+        "organs": ["II", "I"],
+    },
+    # ── ORGAN-III: Ergon ─────────────────────────────────────────────────
+    {
+        "project": "tinyseed",
+        "platform": "community",
+        "relevance": "TinySeed — accelerator and community for bootstrapped SaaS founders",
+        "url": "https://tinyseed.com",
+        "tags": ["bootstrapping", "solo-saas", "micro-isv"],
+        "organs": ["III"],
+    },
+    {
+        "project": "open-startups",
+        "platform": "community",
+        "relevance": "Open Startups — transparent metrics movement for indie founders",
+        "url": "https://openstartups.co",
+        "tags": ["transparency", "indie-hacker", "metrics"],
+        "organs": ["III", "V"],
+    },
+    # ── ORGAN-IV: Taxis ──────────────────────────────────────────────────
+    {
+        "project": "opentelemetry-community",
+        "platform": "community",
+        "relevance": "OpenTelemetry — vendor-neutral observability instrumentation",
+        "url": "https://opentelemetry.io/community",
+        "tags": ["observability", "instrumentation", "cloud-native"],
+        "organs": ["IV"],
+    },
+    {
+        "project": "opengitops",
+        "platform": "community",
+        "relevance": "OpenGitOps — CNCF working group defining GitOps principles",
+        "url": "https://opengitops.dev",
+        "tags": ["gitops", "continuous-delivery", "infrastructure-as-code"],
+        "organs": ["IV"],
+    },
+    {
+        "project": "srecon",
+        "platform": "community",
+        "relevance": "USENIX SREcon — site reliability engineering practitioner community",
+        "url": "https://usenix.org/srecon",
+        "tags": ["sre", "reliability", "devops"],
+        "organs": ["IV"],
+    },
+    # ── ORGAN-V: Logos ───────────────────────────────────────────────────
+    {
+        "project": "humanities-commons",
+        "platform": "community",
+        "relevance": "Humanities Commons — open scholarly network and repository",
+        "url": "https://hcommons.org",
+        "tags": ["academic", "publishing", "commons"],
+        "organs": ["V", "I"],
+    },
+    {
+        "project": "pubpub",
+        "platform": "community",
+        "relevance": "PubPub (Knowledge Futures) — open, community-owned publishing",
+        "url": "https://pubpub.org",
+        "tags": ["open-access", "publishing", "knowledge-futures"],
+        "organs": ["V"],
+    },
+    # ── ORGAN-VI: Koinonia ───────────────────────────────────────────────
+    {
+        "project": "exercism",
+        "platform": "community",
+        "relevance": "Exercism — free, mentored coding practice across languages",
+        "url": "https://exercism.org",
+        "tags": ["education", "mentorship", "open-source"],
+        "organs": ["VI"],
+    },
+    {
+        "project": "the-odin-project",
+        "platform": "community",
+        "relevance": "The Odin Project — open-source full-stack curriculum and community",
+        "url": "https://theodinproject.com",
+        "tags": ["education", "open-source", "web-development"],
+        "organs": ["VI"],
+    },
+    {
+        "project": "hack-club",
+        "platform": "community",
+        "relevance": "Hack Club — global network of teen makers and coding clubs",
+        "url": "https://hackclub.com",
+        "tags": ["education", "makers", "youth"],
+        "organs": ["VI", "II"],
+    },
+    # ── ORGAN-VII: Kerygma ───────────────────────────────────────────────
+    {
+        "project": "matrix-community",
+        "platform": "community",
+        "relevance": "Matrix — open standard for decentralized, federated communication",
+        "url": "https://matrix.org",
+        "tags": ["decentralization", "federation", "messaging"],
+        "organs": ["VII"],
+    },
+    {
+        "project": "nostr-community",
+        "platform": "community",
+        "relevance": "Nostr — simple, censorship-resistant decentralized social protocol",
+        "url": "https://nostr.com",
+        "tags": ["decentralization", "social-web", "protocol"],
+        "organs": ["VII"],
+    },
+    # ── META / Governance ────────────────────────────────────────────────
+    {
+        "project": "all-contributors",
+        "platform": "community",
+        "relevance": "All Contributors — recognizing every kind of project contribution",
+        "url": "https://allcontributors.org",
+        "tags": ["recognition", "contributors", "governance"],
+        "organs": ["META"],
+    },
+    {
+        "project": "software-freedom-conservancy",
+        "platform": "community",
+        "relevance": "Software Freedom Conservancy — fiscal-sponsor home for FOSS projects",
+        "url": "https://sfconservancy.org",
+        "tags": ["open-source", "governance", "nonprofit"],
+        "organs": ["META"],
+    },
+    {
+        "project": "apache-software-foundation",
+        "platform": "community",
+        "relevance": "Apache Software Foundation — 'the Apache Way' of community governance",
+        "url": "https://apache.org",
+        "tags": ["open-source", "governance", "meritocracy"],
+        "organs": ["META", "IV"],
     },
 ]
 

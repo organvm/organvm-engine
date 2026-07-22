@@ -3,6 +3,11 @@ sop: true
 name: prompting-standards
 scope: system
 phase: any
+last_reviewed: 2026-06-19
+governed_paths:
+  - src/organvm_engine/prompting/
+  - src/organvm_engine/contextmd/
+  - tests/test_prompting_standards.py
 triggers: []
 complements: []
 overrides: null

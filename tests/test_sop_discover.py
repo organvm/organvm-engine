@@ -222,6 +222,33 @@ class TestDiscoverSops:
         assert e.complements == ["verification-loop"]
         assert e.overrides is None
 
+    def test_sops_dir_with_governed_paths(self, tmp_path):
+        content = (
+            "---\nsop: true\nname: code-sop\nscope: repo\n"
+            "last_reviewed: 2026-06-01\n"
+            "governed_paths:\n  - src/organvm_engine/cli/\n  - tests/test_cli.py\n"
+            "---\n# Code SOP\n"
+        )
+        _make_sops_dir(tmp_path, "meta-organvm", "engine", "code-sop.md", content)
+        entries = discover_sops(workspace=tmp_path)
+        assert len(entries) == 1
+        assert entries[0].last_reviewed == "2026-06-01"
+        assert entries[0].governed_paths == ["src/organvm_engine/cli/", "tests/test_cli.py"]
+
+    def test_discovers_local_repo_sops_dir(self, tmp_path):
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "sample-repo"\n')
+        _make_sops_dir(
+            tmp_path,
+            "",
+            None,
+            "local-pattern.md",
+            "---\nsop: true\nname: local-pattern\nscope: repo\n---\n# Local Pattern\n",
+        )
+        entries = discover_sops(workspace=tmp_path)
+        assert len(entries) == 1
+        assert entries[0].repo == "sample-repo"
+        assert entries[0].scope == "repo"
+
     def test_parses_phase_from_frontmatter(self, tmp_path):
         content = (
             "---\nsop: true\nname: deploy-check\nscope: repo\n"

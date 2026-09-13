@@ -1,0 +1,159 @@
+{
+  "proposals": [
+    {
+      "authorizes_mutation": false,
+      "basis": "static_source",
+      "code": "mutable_action",
+      "location": "jobs/test-matrix/steps/0",
+      "owner_refs": [],
+      "owner_status": "unresolved",
+      "path": ".github/workflows/ci.yml",
+      "proposal_digest": "69c5b42751d1835f9c0e6346abc55c26740d8d52cc8417a5cbb46ef500160dad",
+      "proposed_action": "Resolve and review an immutable upstream commit/digest before pinning.",
+      "repository_id": 1160447354,
+      "requires_human_approval": true,
+      "requires_review": true,
+      "revision": "0efc9cf5a9998b179dabe9ef815d59a48a50889d",
+      "risk_vector": [
+        2,
+        1,
+        0
+      ],
+      "severity": "medium",
+      "source_digest": "0b5ad4ffd281a43da0184b2f1410d23b4fb61a88ecea3330573e8e70330474fc"
+    },
+    {
+      "authorizes_mutation": false,
+      "basis": "static_source",
+      "code": "mutable_action",
+      "location": "jobs/test-matrix/steps/1",
+      "owner_refs": [],
+      "owner_status": "unresolved",
+      "path": ".github/workflows/ci.yml",
+      "proposal_digest": "1fd81e758a1a8f0a3421de80bbe4ce571e650801af91acec59d9189530e04cd7",
+      "proposed_action": "Resolve and review an immutable upstream commit/digest before pinning.",
+      "repository_id": 1160447354,
+      "requires_human_approval": true,
+      "requires_review": true,
+      "revision": "0efc9cf5a9998b179dabe9ef815d59a48a50889d",
+      "risk_vector": [
+        2,
+        1,
+        0
+      ],
+      "severity": "medium",
+      "source_digest": "0b5ad4ffd281a43da0184b2f1410d23b4fb61a88ecea3330573e8e70330474fc"
+    },
+    {
+      "authorizes_mutation": false,
+      "basis": "static_source",
+      "code": "timeout_unspecified",
+      "location": "jobs/test",
+      "owner_refs": [],
+      "owner_status": "unresolved",
+      "path": ".github/workflows/ci.yml",
+      "proposal_digest": "7cced05c6d53a71cc921e345953f47f67190e7fd2db3215ffbe9d46e25d9b26c",
+      "proposed_action": "Set a measured finite job timeout; do not guess a production limit.",
+      "repository_id": 1160447354,
+      "requires_human_approval": true,
+      "requires_review": true,
+      "revision": "0efc9cf5a9998b179dabe9ef815d59a48a50889d",
+      "risk_vector": [
+        1,
+        1,
+        0
+      ],
+      "severity": "low",
+      "source_digest": "0b5ad4ffd281a43da0184b2f1410d23b4fb61a88ecea3330573e8e70330474fc"
+    },
+    {
+      "authorizes_mutation": false,
+      "basis": "static_source",
+      "code": "timeout_unspecified",
+      "location": "jobs/test-matrix",
+      "owner_refs": [],
+      "owner_status": "unresolved",
+      "path": ".github/workflows/ci.yml",
+      "proposal_digest": "6f2975e35a970950852e673ee6dd08245fc6be245df4cde219569b9be3ab7d4c",
+      "proposed_action": "Set a measured finite job timeout; do not guess a production limit.",
+      "repository_id": 1160447354,
+      "requires_human_approval": true,
+      "requires_review": true,
+      "revision": "0efc9cf5a9998b179dabe9ef815d59a48a50889d",
+      "risk_vector": [
+        1,
+        1,
+        0
+      ],
+      "severity": "low",
+      "source_digest": "0b5ad4ffd281a43da0184b2f1410d23b4fb61a88ecea3330573e8e70330474fc"
+    }
+  ],
+  "scope": "ONE_SELECTED_PUBLIC_WORKFLOW_NOT_ESTATE_CENSUS",
+  "snapshot": {
+    "analyzed_count": 1,
+    "authorizes_mutation": false,
+    "authorizes_release": false,
+    "coverage": "complete",
+    "enumerated_count": 1,
+    "evidence_class": "static_source_analysis",
+    "expected_paths": [
+      ".github/workflows/ci.yml"
+    ],
+    "observed_at": "2026-09-13T14:09:07.556492+00:00",
+    "repository_id": 1160447354,
+    "revision": "0efc9cf5a9998b179dabe9ef815d59a48a50889d",
+    "schema_version": "organvm.workflow-intelligence.v1",
+    "workflows": {
+      ".github/workflows/ci.yml": {
+        "findings": [
+          {
+            "basis": "static_source",
+            "code": "timeout_unspecified",
+            "location": "jobs/test-matrix",
+            "proposed_action": "Set a measured finite job timeout; do not guess a production limit.",
+            "requires_review": true,
+            "severity": "low"
+          },
+          {
+            "basis": "static_source",
+            "code": "mutable_action",
+            "location": "jobs/test-matrix/steps/0",
+            "proposed_action": "Resolve and review an immutable upstream commit/digest before pinning.",
+            "requires_review": true,
+            "severity": "medium"
+          },
+          {
+            "basis": "static_source",
+            "code": "mutable_action",
+            "location": "jobs/test-matrix/steps/1",
+            "proposed_action": "Resolve and review an immutable upstream commit/digest before pinning.",
+            "requires_review": true,
+            "severity": "medium"
+          },
+          {
+            "basis": "static_source",
+            "code": "timeout_unspecified",
+            "location": "jobs/test",
+            "proposed_action": "Set a measured finite job timeout; do not guess a production limit.",
+            "requires_review": true,
+            "severity": "low"
+          }
+        ],
+        "job_count": 2,
+        "normalized_digest": "f6d3c9cf89e1974e1242b727a2862c5a867d329a93cab0f82f62a760b175609e",
+        "reusable_references": [],
+        "source_digest": "0b5ad4ffd281a43da0184b2f1410d23b4fb61a88ecea3330573e8e70330474fc",
+        "status": "analyzed",
+        "transitive_coverage": "not_requested",
+        "triggers": [
+          "pull_request",
+          "push"
+        ]
+      }
+    }
+  },
+  "source_bytes": 1432,
+  "source_git_blob": "259cf89ad7b296c1159365e9578769127e9383b8",
+  "source_url": "https://github.com/organvm/organvm-engine/blob/0efc9cf5a9998b179dabe9ef815d59a48a50889d/.github/workflows/ci.yml"
+}

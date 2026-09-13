@@ -1,0 +1,58 @@
+{
+  "authorizes_release": false,
+  "base_commit": "0efc9cf5a9998b179dabe9ef815d59a48a50889d",
+  "base_tree": "b9c34753c5687ed62960c7aac9843e6643e53d03",
+  "environment": {
+    "PyYAML": "6.0.3",
+    "jsonschema": "4.26.0",
+    "pytest": "9.0.2",
+    "python": "3.13.5"
+  },
+  "not_executed": [
+    "full Engine checkout conftest and test suite",
+    "Python 3.11 or 3.12 runtime",
+    "Ruff (unavailable; pinned install attempt failed)",
+    "Pyright (unavailable)",
+    "model or training experiment",
+    "complete estate workflow collection",
+    "remote deployment",
+    "broker task or lease transitions"
+  ],
+  "observed_at": "2026-09-13T14:10:54.259040+00:00",
+  "publication_state": "prepared_for_draft_PR; published head and hosted observation belong in PR receipt",
+  "record_id": "ORGANVM-RESEARCH-20260911-VERIFICATION",
+  "repository_id": 1160447354,
+  "scope": "only_four_new_source_test_files_in_isolated_workspace_not_full_engine_checkout",
+  "source_manifest": {
+    "src/organvm_engine/ci/agent_eval.py": {
+      "bytes": 14569,
+      "git_blob_sha1": "ba84efb5d364fd605feb05d52042a44a8d0f144c",
+      "sha256": "3588047cd8bdf590b75e926569efab053a905ffb9858432c81d7ea6ab6159789"
+    },
+    "src/organvm_engine/ci/workflow_intelligence.py": {
+      "bytes": 16962,
+      "git_blob_sha1": "e19b9cb80625f3056757afc7be5adc12a93a8c26",
+      "sha256": "43bdb944536d110b4c55f25be7ab4bd1d8f0dbe6d91966aa9e7aebdc8f2e89a0"
+    },
+    "tests/test_agent_eval.py": {
+      "bytes": 11041,
+      "git_blob_sha1": "4cbd1d16a31465253159947acfee518c580d4641",
+      "sha256": "0f8b0b216b781f9990a1c45fd28e0543e52cfc67543f12643c6c4a8d565b5b43"
+    },
+    "tests/test_workflow_intelligence.py": {
+      "bytes": 9546,
+      "git_blob_sha1": "0b177e6d2b25920a59e71e448be555e87ab4aba1",
+      "sha256": "15d943fa2cb57566fda691b6a2fc854e0d4bfe5a2c930e1095fdf6785ffcae00"
+    }
+  },
+  "verification": {
+    "command": "PYTHONPATH=src python -m pytest tests/test_agent_eval.py tests/test_workflow_intelligence.py -q --junitxml=docs/research/evidence/pytest.xml",
+    "errors": 0,
+    "exit_code": 0,
+    "failures": 0,
+    "log_sha256": "354c4b20ff58de2ae06e3231ff0e8aa6645fd45409b3c0155b4b493cd9598980",
+    "skipped": 0,
+    "syntax": "AST parsed using Python 3.11 grammar; not Python 3.11 execution",
+    "tests": 114
+  }
+}

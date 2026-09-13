@@ -1,0 +1,84 @@
+{
+  "authorizes_release": false,
+  "evidence_scope": "seven isolated source/test files; not a complete Engine checkout",
+  "live_adapter": {
+    "continuous_ingestion": false,
+    "decision": "not_executed",
+    "input_capture": "public-safe field projection manually transcribed from connected GitHub responses, not raw response bytes",
+    "producer_authentication": "outside_adapter",
+    "run_id": 34762163480
+  },
+  "not_verified": [
+    "full Engine checkout/conftest and optional dependencies",
+    "Ruff and Pyright",
+    "Python 3.11/3.12 runtime",
+    "independent exact-head review",
+    "required hosted execution",
+    "trusted collector integration and scheduled ingestion",
+    "two real agent frameworks",
+    "private-face extraction and release"
+  ],
+  "parent_commit": "9d891bb9718d517ce764618e08ce8e21589cbcde",
+  "parent_comparison": {
+    "known_defects_reproduced_separately": 3,
+    "new_healing_contract_tests": 20,
+    "parent_failed": 17,
+    "parent_passed": 3,
+    "qualification": "includes new-interface expectations; not 17 independently proven production bugs"
+  },
+  "record_id": "ENGINE-RESEARCH-INTEGRATION-20260913",
+  "repository_id": 1160447354,
+  "source_manifest": {
+    "src/organvm_engine/ci/agent_eval.py": {
+      "bytes": 15507,
+      "git_blob_sha1": "edaa461435315235fd969e209b47783c30be520f",
+      "sha256": "2418314fa9a21027fec0568e09a609438527eefbb5f9f82474c1ba2f8082743f"
+    },
+    "src/organvm_engine/ci/runtime_evidence.py": {
+      "bytes": 9520,
+      "git_blob_sha1": "c226f1995ccdd726301867c7df46e63743dd1fa1",
+      "sha256": "e664f2ea1a5e22c9585d85b0a51cd9db2559bc7c4ee531c0d10cff24324d0843"
+    },
+    "src/organvm_engine/ci/workflow_intelligence.py": {
+      "bytes": 19504,
+      "git_blob_sha1": "b485b5f86aa26848ed1af4831870c0fa71e60495",
+      "sha256": "2832378a6b4a5ce95e09eb1353aa7916faf22d318073d32c80e336fb0c2d3c33"
+    },
+    "tests/test_agent_eval.py": {
+      "bytes": 11041,
+      "git_blob_sha1": "4cbd1d16a31465253159947acfee518c580d4641",
+      "sha256": "0f8b0b216b781f9990a1c45fd28e0543e52cfc67543f12643c6c4a8d565b5b43"
+    },
+    "tests/test_evidence_false_success.py": {
+      "bytes": 4270,
+      "git_blob_sha1": "b3695d443926cd2bd45a31ffd2c4cf55f304ef4c",
+      "sha256": "f38df0ed517835b4608e18c84b91294a5a702c5706fd5a4a2f01fe70e5488d41"
+    },
+    "tests/test_runtime_evidence.py": {
+      "bytes": 6191,
+      "git_blob_sha1": "4baff68b2d7ad506625bd0b430f584c64a574a8c",
+      "sha256": "1e1505aff22f0cf06831951f18132c20ed2f66cbe5a4616a3ebbc2f4523cde28"
+    },
+    "tests/test_workflow_intelligence.py": {
+      "bytes": 9576,
+      "git_blob_sha1": "653f747d5656d875f53ba68b51f1b888fd5cba63",
+      "sha256": "7da1099f06c900a82e8d114e8b5300fc2d04d346ce31f428c7440e2ae8df30c4"
+    }
+  },
+  "verification": {
+    "PyYAML": "6.0.3",
+    "command": "PYTHONPATH=src python -m pytest tests/ -q --junitxml=docs/stewardship/evidence/integration-tests.xml",
+    "errors": 0,
+    "exit_code": 0,
+    "failures": 0,
+    "jsonschema": "4.26.0",
+    "junit_sha256": "665538041b9144e6993dd0ef6569467d80574877beb0b96588b6241883d24f70",
+    "log_sha256": "206b4662ee54ea21542915ba1f42a19acc83651a6212bd91ebaaab59b7ca046e",
+    "pytest": "9.0.2",
+    "runtime": "3.13.5",
+    "skipped": 0,
+    "syntax": "all seven files parsed with Python 3.11 grammar; not 3.11 execution",
+    "test_started_at": "2026-09-13T14:51:57.421118+00:00",
+    "tests": 170
+  }
+}

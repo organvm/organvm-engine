@@ -1,0 +1,48 @@
+{
+  "authorizes_execution": false,
+  "authorizes_release": false,
+  "decision": "not_executed",
+  "enumeration_complete": true,
+  "evidence_class": "github_api_payload_consistency",
+  "jobs": [
+    {
+      "executed_required": 0,
+      "job_id": 103736781558,
+      "name": "test-matrix (3.11)",
+      "observed_steps": 0,
+      "required_count": 3,
+      "runner_id": 0,
+      "state": "not_executed"
+    },
+    {
+      "executed_required": 0,
+      "job_id": 103736781433,
+      "name": "test-matrix (3.12)",
+      "observed_steps": 0,
+      "required_count": 3,
+      "runner_id": 0,
+      "state": "not_executed"
+    },
+    {
+      "executed_required": 0,
+      "job_id": 103736787914,
+      "name": "test",
+      "observed_steps": 0,
+      "required_count": 1,
+      "runner_id": 0,
+      "state": "not_executed"
+    }
+  ],
+  "observed_at": "2026-09-13T14:53:43.628175+00:00",
+  "observed_job_count": 3,
+  "payload_digest": "bfb83b51968f59d66307dc322cf08f94b3900fca45e9538bfc48de98a747a341",
+  "producer_authentication": "outside_adapter",
+  "reported_job_count": 3,
+  "repository_id": 1160447354,
+  "requirements_digest": "04b0968457e9d26de6f78ed9a1d710a0070e3de2507b915b003a267c34e31ef8",
+  "revision": "9d891bb9718d517ce764618e08ce8e21589cbcde",
+  "run_attempt": 1,
+  "run_id": 34762163480,
+  "schema_version": "organvm.github-execution-evidence.v1",
+  "workflow_id": 235510053
+}

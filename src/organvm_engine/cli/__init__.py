@@ -2406,7 +2406,7 @@ def build_parser() -> argparse.ArgumentParser:
     portal_prop.add_argument("--db", default=None, help="Portal DB path")
 
     portal_prepare = portal_sub.add_parser(
-        "prepare", help="Inbound: realize the proposal as a draft internal PR",
+        "prepare", help="Inbound: prepare a local draft PR body (opens no GitHub PR)",
     )
     portal_prepare.add_argument("external", help="External repo (owner/name)")
     portal_prepare.add_argument("--db", default=None, help="Portal DB path")

@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
+
+import pytest
 
 from organvm_engine.cli.portal import (
     cmd_portal_backflow,
@@ -21,6 +24,7 @@ from organvm_engine.cli.portal import (
     cmd_portal_submit,
 )
 from organvm_engine.portal import store
+from organvm_engine.portal.proposals import prepare_internal_pr
 from organvm_engine.portal.state_machine import ExchangeState
 
 EXID = "01EXCHANGE0000000000000001"
@@ -99,19 +103,79 @@ def _count(db_path, table, where=""):
     return n
 
 
-def test_prepare_inbound_draft_pr(tmp_path):
+def test_prepare_inbound_draft_pr(tmp_path, capsys):
     db = tmp_path / "portal.db"
     _seed(db)
     assert cmd_portal_propose(_ns(db, target="organvm-engine")) == 0
     out_dir = tmp_path / "proposals"
     assert cmd_portal_prepare(_ns(db, out_dir=str(out_dir))) == 0
-    # Inbound branch walked to INTERNAL_PR_OPEN, artifact written, no default-branch write.
-    assert _exchange_state(db) == ExchangeState.INTERNAL_PR_OPEN.value
+    # The artifact proves local preparation, not a remotely opened PR.
+    assert _exchange_state(db) == ExchangeState.INTERNAL_PREPARED.value
+    assert _count(db, "transmutation_proposal", "WHERE status='prepared'") == 1
+    assert _count(db, "transmutation_proposal", "WHERE status='pr_open'") == 0
+    assert _count(db, "upstream_interaction") == 0
     artifact = out_dir / f"{EXID}.md"
     assert artifact.exists()
     body = artifact.read_text()
     assert "draft internal pr" in body.lower()
+    assert "this preparation opens no GitHub PR" in body
     assert EXID in body
+    output = capsys.readouterr().out
+    assert "local draft internal PR body:" in output
+    assert "no GitHub PR opened" in output
+
+
+def test_prepare_is_idempotent(tmp_path):
+    db = tmp_path / "portal.db"
+    _seed(db)
+    cmd_portal_propose(_ns(db, target="organvm-engine"))
+    args = _ns(db, out_dir=str(tmp_path / "proposals"))
+    assert cmd_portal_prepare(args) == 0
+    artifact = tmp_path / "proposals" / f"{EXID}.md"
+    before = artifact.read_bytes()
+    assert cmd_portal_prepare(args) == 0
+    assert artifact.read_bytes() == before
+    assert _exchange_state(db) == ExchangeState.INTERNAL_PREPARED.value
+    assert _count(db, "transmutation_proposal") == 1
+    assert _count(db, "transmutation_proposal", "WHERE status='prepared'") == 1
+
+
+def test_prepare_write_failure_does_not_advance(tmp_path, monkeypatch):
+    db = tmp_path / "portal.db"
+    _seed(db)
+    cmd_portal_propose(_ns(db, target="organvm-engine"))
+
+    def fail_write(*args, **kwargs):
+        raise OSError("artifact write failed")
+
+    monkeypatch.setattr(Path, "write_text", fail_write)
+    with pytest.raises(OSError, match="artifact write failed"):
+        cmd_portal_prepare(_ns(db, out_dir=str(tmp_path / "proposals")))
+    assert _exchange_state(db) == ExchangeState.MAPPED.value
+    assert _count(db, "transmutation_proposal", "WHERE status='proposed'") == 1
+
+
+@pytest.mark.parametrize("state,status", [
+    (ExchangeState.INTERNAL_PR_OPEN, "pr_open"),
+    (ExchangeState.INTERNAL_MERGED, "merged"),
+    (ExchangeState.BACKFLOW_COMPLETE, "merged"),
+    (ExchangeState.PATCH_PREPARED, "proposed"),
+])
+def test_prepare_preserves_later_and_outbound_states(tmp_path, state, status):
+    db = tmp_path / "portal.db"
+    _seed(db, state=state)
+    cmd_portal_propose(_ns(db, target="organvm-engine"))
+    conn = store.connect(str(db))
+    proposal = store.get_latest_proposal(conn, REPO)
+    store.set_proposal_status(conn, proposal["id"], status)
+    # Deliberately use a stale row: current persisted PR status must win.
+    artifact, final_state = prepare_internal_pr(conn, proposal, out_dir=tmp_path / "proposals")
+    assert Path(artifact).is_file()
+    assert final_state == state.value
+    assert store.get_exchange(conn, EXID)["state"] == state.value
+    expected_status = "prepared" if status == "proposed" else status
+    assert store.get_latest_proposal(conn, REPO)["status"] == expected_status
+    conn.close()
 
 
 def test_candidate_and_package_outbound(tmp_path):
@@ -215,7 +279,11 @@ def test_metabolize_bounded_idempotent_and_surfaces(tmp_path):
     # Inbound face prepared; exchange moved off MAPPED; nothing sent.
     assert _count(db, "transmutation_proposal") >= 1
     assert _count(db, "upstream_interaction") == 0
-    assert _exchange_state(db) != ExchangeState.MAPPED.value
+    assert _exchange_state(db) == ExchangeState.INTERNAL_PREPARED.value
+    assert _count(db, "transmutation_proposal", "WHERE status='prepared'") == 1
+    snapshot = json.loads((tmp_path / "state" / "state.json").read_text())
+    assert snapshot["proposals_prepared"] == 1
+    assert snapshot["exchanges_by_state"] == {ExchangeState.INTERNAL_PREPARED.value: 1}
 
     # Idempotent + bounded: re-run finds nothing at MAPPED, adds no new proposals.
     before = _count(db, "transmutation_proposal")

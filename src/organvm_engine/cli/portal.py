@@ -7,7 +7,7 @@
 
   Loop-driving verbs (the exchange lifecycle, end to end):
 
-    organvm portal prepare  <external>          Inbound: proposal -> draft internal PR
+    organvm portal prepare  <external>          Inbound: proposal -> local draft PR body
     organvm portal candidate <external> --kind K --rationale R
                                                 Outbound: evidence -> contribution candidate
     organvm portal package  <external>          Outbound: worktree+checks -> prepared packet
@@ -126,7 +126,7 @@ def cmd_portal_propose(args: argparse.Namespace) -> int:
 
 
 def cmd_portal_prepare(args: argparse.Namespace) -> int:
-    """Inbound: realize the latest transmutation proposal as a draft internal PR."""
+    """Inbound: prepare the latest proposal's local draft PR body; open no PR."""
     conn = store.connect(getattr(args, "db", None))
     store.init_exchange_schema(conn)
     proposal = store.get_latest_proposal(conn, args.external)
@@ -138,9 +138,10 @@ def cmd_portal_prepare(args: argparse.Namespace) -> int:
         conn, proposal, out_dir=getattr(args, "out_dir", None),
     )
     print(f"BIFRONS PREPARE (inbound) — {args.external} -> {proposal['target_repo']}")
-    print(f"  exchange: {proposal['exchange_id']}  state: {final_state}")
-    print(f"  draft internal PR: {artifact}")
-    print("  posture: draft-internal-PR-only (no default-branch write)")
+    print(f"  exchange: {proposal['exchange_id']}  recorded state: {final_state}")
+    print(f"  local draft internal PR body: {artifact}")
+    print("  posture: prepared-only (no GitHub PR opened; no default-branch write)")
+    print("  existing remote-state records were not revalidated by this operation")
     conn.close()
     return 0
 
@@ -301,7 +302,7 @@ def cmd_portal_metabolize(args: argparse.Namespace) -> int:
     """One bounded, idempotent BIFRONS beat: absorb -> map -> prepare -> surface.
 
     The autopoietic effector. Reuses the loop verbs, does the inbound face
-    autonomously (proposals + draft internal PRs), and NEVER submits — the outbound
+    autonomously (proposals + local draft PR bodies), and NEVER submits — the outbound
     contribution gate stays human-held. Fail-open: a missing alchemia CLI or a slow
     upstream degrades gracefully; the beat never breaks.
     """
@@ -340,7 +341,7 @@ def cmd_portal_metabolize(args: argparse.Namespace) -> int:
     internal = _internal_repos_from_registry()
     summary = import_stars(conn, internal)
 
-    # 3. Prepare (inbound only, bounded): auto-realize draft internal PRs for the
+    # 3. Prepare (inbound only, bounded): write local draft PR bodies for the
     #    next `budget` high-resonance exchanges still at MAPPED. Converges: each is
     #    moved off MAPPED, so re-runs pick up only genuinely new stars. Never submits.
     prepared = 0

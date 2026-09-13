@@ -17,7 +17,7 @@ from organvm_engine.portal.models import TransmutationProposal
 from organvm_engine.portal.state_machine import ExchangeState, PortalStateMachine
 
 # The inbound branch, in order — the shared prefix plus the internal-evolution
-# states. ``prepare_internal_pr`` walks an exchange forward along this path.
+# preparation states only. A local document is not evidence of an open GitHub PR.
 _INBOUND_ORDER = [
     ExchangeState.STARRED,
     ExchangeState.INDEXED,
@@ -26,7 +26,6 @@ _INBOUND_ORDER = [
     ExchangeState.ABSORPTION_CANDIDATE,
     ExchangeState.INTERNAL_PROPOSAL,
     ExchangeState.INTERNAL_PREPARED,
-    ExchangeState.INTERNAL_PR_OPEN,
 ]
 
 # License decision -> permitted abstraction level + whether code may be copied.
@@ -127,7 +126,9 @@ def render_draft_pr(proposal: Any) -> str:
         _pfield(proposal, "proposed_change"),
         "",
         "## Provenance & posture",
-        "- Realized as a **draft internal PR only** — no default-branch write.",
+        "- Prepared **draft internal PR body only** — this preparation opens no GitHub PR.",
+        "- Opening a PR requires a separate authorized remote write and its evidence.",
+        "- No default-branch write.",
         "- Attribution + provenance to the source repo are mandatory.",
         f"- exchange_id: `{_pfield(proposal, 'exchange_id')}`",
     ])
@@ -143,16 +144,24 @@ def prepare_internal_pr(
     *,
     out_dir: Path | str | None = None,
 ) -> tuple[str, str]:
-    """Walk the exchange's inbound branch to INTERNAL_PR_OPEN and write the draft PR.
+    """Write a local draft PR body and advance at most to INTERNAL_PREPARED.
 
     The inbound analog of ``contrib.executor.prepare``. Advances the lifecycle
     through the legal inbound edges (idempotently, validated by the state
     machine), writes the draft internal-PR review document to ``out_dir``, and
-    marks the proposal's own status ``pr_open``. Returns ``(artifact_path,
-    final_state)``. Performs no git write of any kind.
+    marks an unsubmitted proposal's own status ``prepared``. Returns
+    ``(artifact_path, final_state)``. Performs no git or GitHub write of any kind.
+    Later/legacy recorded states are preserved, not revalidated by preparation.
     """
     store.init_exchange_schema(conn)
     exchange_id = _pfield(proposal, "exchange_id")
+
+    # A failed artifact write must not leave a successful preparation claim.
+    directory = Path(out_dir).expanduser() if out_dir else default_proposals_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    safe = (exchange_id or _pfield(proposal, "external_repo").replace("/", "_")) or "proposal"
+    artifact = directory / f"{safe}.md"
+    artifact.write_text(render_draft_pr(proposal))
 
     final_state = ""
     row = store.get_exchange(conn, exchange_id) if exchange_id else None
@@ -168,19 +177,20 @@ def prepare_internal_pr(
                     state = nxt
             final_state = state.value
         else:
-            # The exchange already forked onto the outbound branch — this is a
-            # two-faced (BIFRONS) exchange. Record the inbound artifact without
-            # rewinding the tracked lifecycle state.
+            # Preserve outbound, later inbound, and legacy states. Regenerating
+            # a document neither rewinds them nor verifies a remote PR exists.
             final_state = current
-
-    directory = Path(out_dir).expanduser() if out_dir else default_proposals_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    safe = (exchange_id or _pfield(proposal, "external_repo").replace("/", "_")) or "proposal"
-    artifact = directory / f"{safe}.md"
-    artifact.write_text(render_draft_pr(proposal))
 
     pid = _pfield(proposal, "id")
     if pid:
-        store.set_proposal_status(conn, int(pid), "pr_open")
+        # Consult the stored status, not a potentially stale proposal object.
+        # Existing submitted/terminal/legacy records require reconciliation,
+        # not an implicit downgrade or recertification by a local file write.
+        conn.execute(
+            "UPDATE transmutation_proposal SET status='prepared' "
+            "WHERE id=? AND status IN ('proposed', 'prepared')",
+            (int(pid),),
+        )
+        conn.commit()
 
     return str(artifact), final_state

@@ -5,7 +5,7 @@
 # drives ONE star's exchange through the WHOLE portal loop and asserts the
 # single-exchange_id thread across both faces, plus the human-gate boundary.
 #
-#   star -> dossier -> [inbound] proposal -> draft internal PR
+#   star -> dossier -> [inbound] proposal -> local draft internal PR body
 #                   -> [outbound] candidate -> packet -> submit(gated) -> backflow
 #
 # Core is deterministic + offline (seeded exchange) so it runs anywhere,
@@ -63,11 +63,11 @@ conn.commit(); conn.close()
 print(f"  seeded exchange {exid} + dossier for {repo}")
 PY
 
-# --- 1. Inbound face: proposal -> draft internal PR (no default-branch write) ---
-say "1. inbound: propose -> prepare (draft internal PR)"
+# --- 1. Inbound face: proposal -> local draft body (no GitHub PR opened) ---
+say "1. inbound: propose -> prepare (local draft internal PR body)"
 organvm portal propose "$REPO" organvm-engine
 organvm portal prepare "$REPO" --out-dir "$PROPOSALS"
-[ -f "$PROPOSALS/01EXCHANGEDONESH0000000001.md" ] || die "draft internal PR artifact missing"
+[ -f "$PROPOSALS/01EXCHANGEDONESH0000000001.md" ] || die "local draft internal PR body missing"
 
 # --- 2. Outbound face: candidate -> packet (nothing sent) ---
 say "2. outbound: candidate -> package (prepared, not submitted)"
@@ -110,9 +110,9 @@ if n_up != 0: fails.append(f"upstream_interaction={n_up} (expected 0 — nothing
 for t in ("transmutation_proposal", "contribution_candidate", "backflow_signal"):
     n = one(f"SELECT COUNT(*) FROM {t} WHERE exchange_id=?", exid)  # noqa: S608
     if n < 1: fails.append(f"{t} has no row threaded to exchange {exid}")
-# proposal was realized (its own status advanced to pr_open)
+# proposal was prepared locally; no remote PR was opened by this operation
 pst = one("SELECT status FROM transmutation_proposal WHERE exchange_id=?", exid)
-if pst != "pr_open": fails.append(f"proposal status {pst} != pr_open")
+if pst != "prepared": fails.append(f"proposal status {pst} != prepared")
 # backflow generated at least the community + distribution signals
 n_bf = one("SELECT COUNT(*) FROM backflow_signal WHERE exchange_id=?", exid)
 if n_bf < 2: fails.append(f"backflow_signal={n_bf} (expected >=2)")

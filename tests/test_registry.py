@@ -31,6 +31,20 @@ class TestLoader:
         with pytest.raises(FileNotFoundError):
             load_registry("/nonexistent/path.json")
 
+    @pytest.mark.parametrize(
+        "payload,match",
+        [
+            ({"_redirect": "elsewhere"}, "compatibility redirect"),
+            ({"organs": {}}, "non-empty organs"),
+            ({"organs": {"ORGAN-I": {"repositories": []}}}, "zero repositories"),
+        ],
+    )
+    def test_load_rejects_noncanonical_payloads(self, tmp_path, payload, match):
+        path = tmp_path / "registry.json"
+        path.write_text(json.dumps(payload))
+        with pytest.raises(ValueError, match=match):
+            load_registry(path)
+
     def test_save_to_explicit_path(self, registry, tmp_path):
         out = tmp_path / "out.json"
         save_registry(registry, out)

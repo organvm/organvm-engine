@@ -46,7 +46,7 @@ def _block_production_paths(monkeypatch):
     # content-based probe can never resolve the real corpus during tests.
     monkeypatch.setattr(paths_mod, "_DEFAULT_CODE_ROOT", _BLOCKED)
     monkeypatch.setattr(
-        loader_mod, "_default_registry_path", lambda: _BLOCKED / "registry-v2.json",
+        loader_mod, "_default_registry_path", lambda: _BLOCKED / "repo-registry.json",
     )
     # Block env vars that bypass _DEFAULT_WORKSPACE, ensuring tests never
     # touch production corpus/governance files.

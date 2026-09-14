@@ -1,4 +1,4 @@
-"""Load and save registry-v2.json."""
+"""Load and save the canonical repo-registry.json payload."""
 
 import json
 from pathlib import Path
@@ -20,6 +20,22 @@ def _count_repos(data: dict) -> int:
     return total
 
 
+def _validate_loaded_registry(data: object, source: Path) -> dict:
+    """Reject compatibility markers and empty payloads at the read boundary."""
+    if not isinstance(data, dict):
+        raise ValueError(f"Registry at {source} must be a JSON object")
+    if "_redirect" in data:
+        raise ValueError(
+            f"Registry at {source} is a compatibility redirect, not repo-registry.json",
+        )
+    organs = data.get("organs")
+    if not isinstance(organs, dict) or not organs:
+        raise ValueError(f"Registry at {source} has no non-empty organs object")
+    if _count_repos(data) == 0:
+        raise ValueError(f"Registry at {source} contains zero repositories")
+    return data
+
+
 def load_registry(path: Path | str | None = None) -> dict:
     """Load registry from a file or per-organ directory.
 
@@ -38,14 +54,14 @@ def load_registry(path: Path | str | None = None) -> dict:
     if registry_path.is_dir():
         from organvm_engine.registry.split import merge_registry
 
-        return merge_registry(registry_path)
+        return _validate_loaded_registry(merge_registry(registry_path), registry_path)
 
     with registry_path.open() as f:
-        return json.load(f)
+        return _validate_loaded_registry(json.load(f), registry_path)
 
 
 def save_registry(data: dict, path: Path | str | None = None) -> None:
-    """Write registry-v2.json back to disk with consistent formatting.
+    """Write repo-registry.json back to disk with consistent formatting.
 
     Guards against accidental overwrites: if writing to the default
     production path and the data contains far fewer repos than expected,

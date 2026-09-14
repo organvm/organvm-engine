@@ -67,7 +67,7 @@ print(result.summary())
 
 | Module | Purpose |
 |--------|---------|
-| `registry` | Load, query, validate, update registry-v2.json |
+| `registry` | Load, query, validate, update canonical `repo-registry.json` |
 | `governance` | Rules enforcement, state machine, dependency graph, audit |
 | `seed` | Discover, parse, and graph seed.yaml files |
 | `metrics` | Compute and propagate system-wide metrics |

@@ -40,7 +40,7 @@ Every other module imports from these; change them carefully.
 
 | Module | Role |
 |--------|------|
-| `registry/` | Load/save/query/validate/update `registry-v2.json` |
+| `registry/` | Load/save/query/validate/update canonical `repo-registry.json` |
 | `governance/` | Promotion state machine, dependency graph validation, audit, blast-radius impact |
 | `seed/` | Discover `seed.yaml` files across workspace, read them, build produces/consumes graph |
 | `metrics/` | Calculate system metrics, propagate into markdown/JSON, timeseries, variable resolution |
@@ -86,7 +86,7 @@ All pipeline outputs go to `corpus_dir/data/atoms/` with a `pipeline-manifest.js
 
 ### Registry data safety
 
-`registry/loader.py` → `save_registry()` refuses to write fewer than 50 repos to the production path. This prevents test fixtures from accidentally overwriting the real `registry-v2.json` (2,200+ lines).
+`registry/loader.py` → `save_registry()` refuses to write fewer than 50 repos to the production path. This prevents test fixtures from accidentally overwriting the real `repo-registry.json`.
 
 ### Test isolation
 
@@ -106,7 +106,7 @@ All pipeline outputs go to `corpus_dir/data/atoms/` with a `pipeline-manifest.js
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ORGANVM_WORKSPACE_DIR` | `~/Workspace` | Workspace root for all organ directories |
-| `ORGANVM_CORPUS_DIR` | `<workspace>/meta-organvm/organvm-corpvs-testamentvm` | Path to corpus repo (registry, governance rules) |
+| `ORGANVM_CORPUS_DIR` | `~/Code/organvm/organvm-corpvs-testamentvm` | Path to the canonical corpus repo; explicit override always wins |
 
 <!-- ORGANVM:AUTO:START -->
 ## System Context (auto-generated — do not edit)

@@ -11,6 +11,7 @@ from pathlib import Path
 import yaml
 
 from organvm_engine.organ_config import organ_dir_map, registry_key_to_dir
+from organvm_engine.paths import PathConfig
 from organvm_engine.registry.loader import load_registry
 from organvm_engine.registry.query import all_repos
 from organvm_engine.seed.discover import DEFAULT_WORKSPACE
@@ -24,7 +25,7 @@ def load_governance_config(workspace: Path | None = None) -> None:
     """Load organ mappings from governance-config.yaml if available."""
     global ORGAN_DIR_MAP, REGISTRY_KEY_MAP
     ws = workspace or DEFAULT_WORKSPACE
-    config_path = ws / "meta-organvm/organvm-corpvs-testamentvm/governance-config.yaml"
+    config_path = PathConfig(workspace_dir=ws).corpus_dir() / "governance-config.yaml"
 
     if config_path.is_file():
         try:
@@ -434,10 +435,10 @@ def install_hooks(
 # ORGANVM Auto-Sync Context Hook
 # Automatically runs 'organvm context sync' after registry/seed changes
 
-# Check if registry-v2.json or any seed.yaml was modified in the commit
+# Check if the canonical registry (or compatibility breadcrumb) or seed changed
 FILES_CHANGED=$(git diff-tree --no-commit-id --name-only -r HEAD)
 
-if echo "$FILES_CHANGED" | grep -qE "(registry-v2.json|seed.yaml)"; then
+if echo "$FILES_CHANGED" | grep -qE "(repo-registry.json|registry-v2.json|seed.yaml)"; then
     echo ":: ORGANVM post-commit :: Registry/Seed change detected. Syncing context files..."
     organvm context sync
 fi

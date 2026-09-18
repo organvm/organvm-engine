@@ -1,0 +1,83 @@
+{
+  "authorizes_release": false,
+  "evidence_scope": "seven changed source/test files verified in a complete Engine checkout",
+  "live_adapter": {
+    "continuous_ingestion": false,
+    "decision": "not_executed",
+    "input_capture": "public-safe field projection manually transcribed from connected GitHub responses, not raw response bytes",
+    "producer_authentication": "outside_adapter",
+    "run_id": 34762163480
+  },
+  "not_verified": [
+    "optional ontologia dependencies",
+    "Python 3.11 runtime",
+    "independent exact-head review after the final evidence refresh",
+    "required hosted execution",
+    "trusted collector integration and scheduled ingestion",
+    "two real agent frameworks",
+    "private-face extraction and release"
+  ],
+  "parent_commit": "9d891bb9718d517ce764618e08ce8e21589cbcde",
+  "parent_comparison": {
+    "known_defects_reproduced_separately": 3,
+    "new_healing_contract_tests": 20,
+    "parent_failed": 17,
+    "parent_passed": 3,
+    "qualification": "includes new-interface expectations; not 17 independently proven production bugs"
+  },
+  "record_id": "ENGINE-RESEARCH-INTEGRATION-20260913",
+  "repository_id": 1160447354,
+  "source_manifest": {
+    "src/organvm_engine/ci/agent_eval.py": {
+      "bytes": 22386,
+      "git_blob_sha1": "8c2fce58ddb3131c5539f5f9931c450c6544a1da",
+      "sha256": "67f9d1067c773d8618237c18747b4858d81815b723fef53e283c94e67c9c033c"
+    },
+    "src/organvm_engine/ci/runtime_evidence.py": {
+      "bytes": 14283,
+      "git_blob_sha1": "56976b7dd91f0835a0cc87a7580488fc2907351a",
+      "sha256": "80968cc5926c85cd10309d70f6d5708991c47ddbda20326a66d28652a38d9329"
+    },
+    "src/organvm_engine/ci/workflow_intelligence.py": {
+      "bytes": 35137,
+      "git_blob_sha1": "9e4ee67ccfc5ab12e3105f023e188ad5f72379bc",
+      "sha256": "0f821cf493ccd22e48d3a1c7f08d502249aa076b79f2f2259033cb0b7ed06626"
+    },
+    "tests/test_agent_eval.py": {
+      "bytes": 19830,
+      "git_blob_sha1": "8df9ec548e9a9649ba00b33bb48d3a4aabf6793a",
+      "sha256": "013cf5af8169354224d0355eed2ee12953d9fb04c02de438c7f3f1266e4005cd"
+    },
+    "tests/test_evidence_false_success.py": {
+      "bytes": 6651,
+      "git_blob_sha1": "a9d713632007527f00e6ee9c85719b65fc6b0f00",
+      "sha256": "461e3a2d13ce1e93bd284211250cb8d16bf26722a1129ef5b6fd4ef017c635bf"
+    },
+    "tests/test_runtime_evidence.py": {
+      "bytes": 12346,
+      "git_blob_sha1": "81c3fd360ba422da893552c45ce0d870d4ec254f",
+      "sha256": "d87ea13e6261acd2636e882c8edb1b000b2e96c1276f6097b078315434c2f483"
+    },
+    "tests/test_workflow_intelligence.py": {
+      "bytes": 27146,
+      "git_blob_sha1": "cbef4d8cfed69991d57438803a96344fb9854531",
+      "sha256": "48b428572afcfe8a8f4bda2002875cdb3397769a13e88975179b5e06531e3567"
+    }
+  },
+  "verification": {
+    "PyYAML": "6.0.3",
+    "command": "PYTHONPATH=src .venv/bin/python -m pytest tests/test_agent_eval.py tests/test_workflow_intelligence.py tests/test_evidence_false_success.py tests/test_runtime_evidence.py -q --junitxml=docs/research/evidence/integration-2026-09-18.xml",
+    "errors": 0,
+    "exit_code": 0,
+    "failures": 0,
+    "jsonschema": "4.26.0",
+    "junit_artifact": "docs/research/evidence/integration-2026-09-18.xml",
+    "junit_sha256": "168ce9732e56dd8e8794abd78bfcf375f603761eec0a9972f803d4605799875c",
+    "pytest": "9.1.1",
+    "runtime": "3.12.14",
+    "skipped": 0,
+    "syntax": "Ruff passed; Pyright returned 0 errors with environment-only missing-source/import warnings",
+    "test_started_at": "2026-09-18T20:14:24.050369Z",
+    "tests": 326
+  }
+}
